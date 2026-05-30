@@ -1,0 +1,50 @@
+{
+  "name": "habbo-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the public Habbo API and the Wired Variables API.",
+  "license": "MIT",
+  "author": {
+    "name": "Michael Araque (cebolla1)",
+    "url": "https://github.com/michyaraque"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "example:profiles": "tsx examples/profiles.ts",
+    "example:variables": "tsx examples/variables.ts",
+    "docs": "typedoc",
+    "docs:serve": "npx --yes http-server docs -p 8080 -c-1"
+  },
+  "keywords": [
+    "habbo",
+    "habbo-sdk",
+    "wired",
+    "api",
+    "typescript"
+  ],
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typedoc": "^0.28.19",
+    "typescript": "^5.7.2"
+  }
+}

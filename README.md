@@ -1,4 +1,4 @@
-# habbo-sdk
+# Habbo SDK
 
 A TypeScript SDK that wraps two distinct Habbo contracts behind a single client:
 
