@@ -1,0 +1,17 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/sdk",
+  "name": "habbo-sdk",
+  "readme": "README.md",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "categorizeByGroup": true,
+  "intentionallyNotExported": ["HttpClient", "HttpMethod", "ResolvedConfig"],
+  "navigationLinks": {
+    "REST API reference": "../api/",
+    "npm": "https://www.npmjs.com/package/habbo-sdk"
+  },
+  "sort": ["source-order"]
+}

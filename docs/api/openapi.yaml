@@ -1,0 +1,745 @@
+openapi: 3.1.0
+info:
+  title: Habbo Wired Variables API
+  version: 0.1.0
+  license:
+    name: MIT
+  description: >
+    REST reference for the endpoints wrapped by habbo-sdk.
+
+
+    The Wired Variables endpoints are derived from a pre-release leak. Their
+    paths and HTTP methods are confirmed, but the request and response body
+    shapes are inferred and may change once the API is publicly available. Such
+    schemas are tagged **UNVERIFIED** in their description.
+
+
+    The public Habbo API endpoints require no authentication. The Wired Variables
+    endpoints are authenticated with the `X-Wired-Write-Key` header.
+servers:
+  - url: https://www.habbo.{hotel}
+    description: Habbo hotel host
+    variables:
+      hotel:
+        default: es
+        enum: [com, es, com.br, de, fi, fr, it, nl, com.tr]
+
+tags:
+  - name: Profiles
+    description: Public, unauthenticated user, group, and room data.
+  - name: Variables
+    description: Wired variables within a room.
+  - name: Variable profiles
+    description: The full set of variables attached to an entity.
+
+security:
+  - WiredWriteKey: []
+
+components:
+  securitySchemes:
+    WiredWriteKey:
+      type: apiKey
+      in: header
+      name: X-Wired-Write-Key
+      description: Per-room write key for the Wired Variables API.
+  parameters:
+    roomId:
+      name: roomId
+      in: path
+      required: true
+      schema: { type: string }
+    scope:
+      name: scope
+      in: path
+      required: true
+      schema: { type: string, enum: [user, furni] }
+    variableName:
+      name: variableName
+      in: path
+      required: true
+      schema: { type: string }
+    targetKind:
+      name: targetKind
+      in: path
+      required: true
+      schema: { type: string }
+      description: Entity kind, e.g. user, pet, bot, or a furni kind.
+    entityId:
+      name: entityId
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    VariableValue:
+      description: A wired variable value.
+      oneOf:
+        - type: string
+        - type: number
+        - type: boolean
+    WiredVariable:
+      type: object
+      description: "UNVERIFIED response shape."
+      properties:
+        name: { type: string }
+        scope: { type: string, enum: [user, furni, global] }
+        targetKind: { type: string }
+        entityId: { type: string }
+        value: { $ref: "#/components/schemas/VariableValue" }
+        updatedAt: { type: string, format: date-time }
+      required: [name, scope, value]
+    SetVariableInput:
+      type: object
+      description: "UNVERIFIED request shape."
+      properties:
+        value: { $ref: "#/components/schemas/VariableValue" }
+      required: [value]
+    ApiEnvelope:
+      type: object
+      description: Common response envelope for Wired Variables API responses.
+      properties:
+        status: { type: string, example: OK }
+        errors:
+          type: array
+          items: { type: string }
+        errorDetails:
+          type: object
+          additionalProperties: true
+        userStatus:
+          nullable: true
+          type: string
+      required: [status, errors, errorDetails]
+    VariableEntry:
+      type: object
+      description: A stored variable with timestamps.
+      properties:
+        value: { $ref: "#/components/schemas/VariableValue" }
+        creation_time: { type: string, format: date-time }
+        update_time: { type: string, format: date-time }
+      required: [value, creation_time, update_time]
+    BatchRequest:
+      type: object
+      description: A single operation inside a batch request.
+      properties:
+        op_id: { type: string, example: "pets:119" }
+        method: { type: string, enum: [GET, POST, PUT, PATCH, DELETE] }
+        path: { type: string, example: "/pets/119" }
+        body:
+          type: object
+          properties:
+            value: { $ref: "#/components/schemas/VariableValue" }
+      required: [op_id, method, path]
+    BatchInput:
+      type: object
+      description: "UNVERIFIED request shape."
+      properties:
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/BatchRequest" }
+      required: [requests]
+    BatchResultItem:
+      type: object
+      properties:
+        status: { type: integer, example: 200 }
+        body: { $ref: "#/components/schemas/VariableEntry" }
+      required: [status, body]
+    BatchResult:
+      allOf:
+        - $ref: "#/components/schemas/ApiEnvelope"
+        - type: object
+          description: "UNVERIFIED response shape."
+          properties:
+            content:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items: { $ref: "#/components/schemas/BatchResultItem" }
+    BulkDeleteInput:
+      type: object
+      description: "UNVERIFIED request shape."
+      properties:
+        variables:
+          type: array
+          items: { type: string }
+          example: ["variable_name_1", "variable_name_2"]
+      required: [variables]
+    BulkDeleteResult:
+      allOf:
+        - $ref: "#/components/schemas/ApiEnvelope"
+        - type: object
+          description: "UNVERIFIED response shape."
+          properties:
+            content:
+              type: object
+              properties:
+                deleted: { type: integer }
+    DeleteVariableResult:
+      allOf:
+        - $ref: "#/components/schemas/ApiEnvelope"
+        - type: object
+          description: "UNVERIFIED response shape."
+    CountResult:
+      type: object
+      description: "UNVERIFIED response shape."
+      properties:
+        count: { type: integer }
+      required: [count]
+    VariablesProfileVariables:
+      type: object
+      description: Map of variable name to VariableEntry.
+      additionalProperties: { $ref: "#/components/schemas/VariableEntry" }
+    VariablesProfileContent:
+      type: object
+      properties:
+        variables: { $ref: "#/components/schemas/VariablesProfileVariables" }
+    VariablesProfileResult:
+      allOf:
+        - $ref: "#/components/schemas/ApiEnvelope"
+        - type: object
+          properties:
+            content: { $ref: "#/components/schemas/VariablesProfileContent" }
+    VariablesProfilePatch:
+      type: object
+      description: "UNVERIFIED request shape: map of variable name to value."
+      properties:
+        variables:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/VariableValue" }
+          example:
+            VARIABLE_NAME_1: 1
+            VARIABLE_NAME_2: 2
+      required: [variables]
+    SetVariableFormInput:
+      type: object
+      description: "UNVERIFIED request shape (x-www-form-urlencoded)."
+      properties:
+        value: { $ref: "#/components/schemas/VariableValue" }
+      required: [value]
+    SetVariableResult:
+      allOf:
+        - $ref: "#/components/schemas/ApiEnvelope"
+        - type: object
+          properties:
+            content: { $ref: "#/components/schemas/VariableEntry" }
+
+paths:
+  /api/public/ping:
+    get:
+      tags: [Profiles]
+      summary: Ping the public API.
+      security: []
+      responses:
+        "200":
+          description: The service is available.
+
+  /api/public/users:
+    get:
+      tags: [Profiles]
+      summary: Retrieve user information by name.
+      security: []
+      parameters:
+        - { name: name, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The matching user.
+
+  /api/public/users/{id}:
+    get:
+      tags: [Profiles]
+      summary: Retrieve user information by ID.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The user.
+
+  /api/public/users/{id}/profile:
+    get:
+      tags: [Profiles]
+      summary: Retrieve detailed profile information for a specific user.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Friends, groups, rooms, and badges.
+
+  /api/public/users/{id}/friends:
+    get:
+      tags: [Profiles]
+      summary: Retrieve a list of friends for a specific user.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The user's friends.
+
+  /api/public/users/{id}/groups:
+    get:
+      tags: [Profiles]
+      summary: Retrieve a list of groups for a specific user.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The user's groups.
+
+  /api/public/users/{id}/rooms:
+    get:
+      tags: [Profiles]
+      summary: Retrieve a list of public rooms for a specific user.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The user's rooms.
+
+  /api/public/users/{id}/badges:
+    get:
+      tags: [Profiles]
+      summary: Retrieve a list of badges for a specific user.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The user's badges.
+
+  /api/public/achievements:
+    get:
+      tags: [Profiles]
+      summary: Retrieve all achievements.
+      security: []
+      responses:
+        "200":
+          description: The achievement catalogue.
+
+  /api/public/achievements/{id}:
+    get:
+      tags: [Profiles]
+      summary: Get achievements for a specific user.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The user's achievements.
+
+  /api/public/badge/owners/{badgeCode}:
+    get:
+      tags: [Profiles]
+      summary: Retrieve badge owner details for a badge code.
+      security: []
+      parameters:
+        - { name: badgeCode, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The badge owners.
+
+  /api/public/groups/{id}:
+    get:
+      tags: [Profiles]
+      summary: Retrieve a specific group by its ID.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The group.
+
+  /api/public/groups/{id}/members:
+    get:
+      tags: [Profiles]
+      summary: Retrieve members of a specific group.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The group members.
+
+  /api/public/rooms/{roomId}:
+    get:
+      tags: [Profiles]
+      summary: Retrieve information about a specific room.
+      security: []
+      parameters:
+        - { name: roomId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The room.
+
+  /api/public/lists/hotlooks:
+    get:
+      tags: [Profiles]
+      summary: Retrieve a list of hot looks.
+      description: Returns an XML document rather than JSON.
+      security: []
+      responses:
+        "200":
+          description: The hot looks XML.
+          content:
+            application/xml:
+              schema: { type: string }
+
+  /api/public/marketplace/stats/batch:
+    post:
+      tags: [Profiles]
+      summary: Batch marketplace stats endpoint.
+      description: "UNVERIFIED request and response shapes."
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  furniType: { type: string }
+                  classId: { type: integer }
+      responses:
+        "200":
+          description: The marketplace statistics.
+
+  /server/v1/rooms/{roomId}/variables:
+    get:
+      tags: [Variables]
+      summary: List wired variables configured in a room.
+      parameters:
+        - $ref: "#/components/parameters/roomId"
+      responses:
+        "200":
+          description: All wired variables.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WiredVariable" }
+
+  /server/v1/rooms/{roomId}/variables/{scope}/{variableName}/{targetKind}/{entityId}:
+    parameters:
+      - $ref: "#/components/parameters/roomId"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/variableName"
+      - $ref: "#/components/parameters/targetKind"
+      - $ref: "#/components/parameters/entityId"
+    get:
+      tags: [Variables]
+      summary: Read a single user or furni wired variable.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WiredVariable" }
+          description: The variable.
+    put:
+      tags: [Variables]
+      summary: Set a single user or furni wired variable.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetVariableInput" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WiredVariable" }
+          description: The updated variable.
+    patch:
+      tags: [Variables]
+      summary: Update a single user or furni wired variable.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetVariableInput" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WiredVariable" }
+          description: The updated variable.
+    delete:
+      tags: [Variables]
+      summary: Delete a single user or furni wired variable.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeleteVariableResult" }
+          description: Deleted.
+
+  /server/v1/rooms/{roomId}/variables/{scope}/{variableName}/{targetKind}:
+    get:
+      tags: [Variables]
+      summary: List wired variable values for a target kind.
+      parameters:
+        - $ref: "#/components/parameters/roomId"
+        - $ref: "#/components/parameters/scope"
+        - $ref: "#/components/parameters/variableName"
+        - $ref: "#/components/parameters/targetKind"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WiredVariable" }
+          description: The values.
+
+  /server/v1/rooms/{roomId}/variables/{scope}/{variableName}/{targetKind}/count:
+    get:
+      tags: [Variables]
+      summary: Count wired variable values for a target kind.
+      parameters:
+        - $ref: "#/components/parameters/roomId"
+        - $ref: "#/components/parameters/scope"
+        - $ref: "#/components/parameters/variableName"
+        - $ref: "#/components/parameters/targetKind"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CountResult" }
+          description: The count.
+
+  /server/v1/rooms/{roomId}/variables/bulk-delete:
+    post:
+      tags: [Variables]
+      summary: Delete multiple wired variables by name.
+      parameters:
+        - $ref: "#/components/parameters/roomId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkDeleteInput" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkDeleteResult" }
+          description: The result.
+
+  /server/v1/rooms/{roomId}/variables/user/{variableName}/batch:
+    post:
+      tags: [Variables]
+      summary: Execute a batch of wired variable operations for user scope.
+      parameters:
+        - $ref: "#/components/parameters/roomId"
+        - $ref: "#/components/parameters/variableName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BatchInput" }
+            example:
+              requests:
+                - op_id: "pets:119"
+                  method: PATCH
+                  path: "/pets/119"
+                  body:
+                    value: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BatchResult" }
+              example:
+                status: OK
+                errors: []
+                errorDetails: {}
+                content:
+                  results:
+                    - status: 200
+                      body:
+                        value: 52
+                        creation_time: "2026-05-30T12:00:00Z"
+                        update_time: "2026-05-30T12:00:00Z"
+          description: Batch result.
+
+  /server/v1/rooms/{roomId}/variables/global/{variableName}:
+    parameters:
+      - $ref: "#/components/parameters/roomId"
+      - $ref: "#/components/parameters/variableName"
+    get:
+      tags: [Variables]
+      summary: Read a global room wired variable.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WiredVariable" }
+          description: The variable.
+    patch:
+      tags: [Variables]
+      summary: Update a global room wired variable.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetVariableInput" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WiredVariable" }
+          description: The updated variable.
+
+  /server/v1/rooms/{roomId}/variables_profile/user/users:
+    get:
+      tags: [Variable profiles]
+      summary: Read a user variables profile by name or unique_id.
+      parameters:
+        - $ref: "#/components/parameters/roomId"
+        - { name: name, in: query, schema: { type: string } }
+        - { name: unique_id, in: query, schema: { type: string } }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VariablesProfileResult" }
+          description: The profile.
+
+  /server/v1/rooms/{roomId}/variables_profile/user/{targetKind}/{entityId}:
+    parameters:
+      - $ref: "#/components/parameters/roomId"
+      - $ref: "#/components/parameters/targetKind"
+      - $ref: "#/components/parameters/entityId"
+    get:
+      tags: [Variable profiles]
+      summary: Read a user, pet, or bot variables profile.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VariablesProfileResult" }
+          description: The profile.
+    patch:
+      tags: [Variable profiles]
+      summary: Patch a user, pet, or bot variables profile.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VariablesProfilePatch" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VariablesProfileResult" }
+          description: The updated profile.
+    delete:
+      tags: [Variable profiles]
+      summary: Delete a user, pet, or bot variables profile.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeleteVariableResult" }
+          description: Deleted.
+
+  /server/v1/rooms/{roomId}/variables_profile/furni/{targetKind}/{entityId}:
+    parameters:
+      - $ref: "#/components/parameters/roomId"
+      - $ref: "#/components/parameters/targetKind"
+      - $ref: "#/components/parameters/entityId"
+    get:
+      tags: [Variable profiles]
+      summary: Read a furni variables profile.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VariablesProfileResult" }
+          description: The profile.
+    patch:
+      tags: [Variable profiles]
+      summary: Patch a furni variables profile.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VariablesProfilePatch" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VariablesProfileResult" }
+          description: The updated profile.
+
+  /server/v1/rooms/{roomId}/variables_profile/global:
+    parameters:
+      - $ref: "#/components/parameters/roomId"
+    get:
+      tags: [Variable profiles]
+      summary: Read the global variables profile.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VariablesProfileResult" }
+          description: The profile.
+    patch:
+      tags: [Variable profiles]
+      summary: Patch the global variables profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VariablesProfilePatch" }
+            example:
+              variables:
+                VARIABLE_NAME_1: 1
+                VARIABLE_NAME_2: 2
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VariablesProfileResult" }
+              example:
+                status: OK
+                errors: []
+                errorDetails: {}
+                content:
+                  variables:
+                    VARIABLE_NAME_1:
+                      value: 1
+                      creation_time: "2026-05-30T12:00:00Z"
+                      update_time: "2026-05-30T12:00:00Z"
+                    VARIABLE_NAME_2:
+                      value: 2
+                      creation_time: "2026-05-30T12:00:00Z"
+                      update_time: "2026-05-30T12:00:00Z"
+          description: The updated profile.
+
+  /server/v1/rooms/{roomId}/variables_profile/global/{variableName}:
+    parameters:
+      - $ref: "#/components/parameters/roomId"
+      - $ref: "#/components/parameters/variableName"
+    patch:
+      tags: [Variable profiles]
+      summary: Set a single variable in the global profile.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: "#/components/schemas/SetVariableFormInput" }
+            example:
+              value: 50
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetVariableResult" }
+              example:
+                status: OK
+                errors: []
+                errorDetails: {}
+                content:
+                  value: 50
+                  creation_time: "2026-05-30T12:00:00Z"
+                  update_time: "2026-05-30T12:00:00Z"
+                userStatus: null
+          description: The updated variable.

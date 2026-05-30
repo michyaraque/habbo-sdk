@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>habbo-sdk — documentation</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          sans-serif;
+        line-height: 1.5;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        background: #0d1117;
+        color: #e6edf3;
+      }
+      main {
+        max-width: 36rem;
+        padding: 2rem;
+      }
+      h1 {
+        margin: 0 0 0.25rem;
+        font-size: 2rem;
+      }
+      p.lead {
+        margin: 0 0 2rem;
+        color: #9da7b3;
+      }
+      a.card {
+        display: block;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid #30363d;
+        border-radius: 0.75rem;
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.15s ease;
+      }
+      a.card:hover {
+        border-color: #58a6ff;
+      }
+      a.card h2 {
+        margin: 0 0 0.25rem;
+        font-size: 1.1rem;
+      }
+      a.card span {
+        color: #9da7b3;
+        font-size: 0.9rem;
+      }
+      footer {
+        margin-top: 2rem;
+        font-size: 0.85rem;
+        color: #6e7681;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>habbo-sdk</h1>
+      <p class="lead">
+        TypeScript SDK for the public Habbo API and the Wired Variables API.
+      </p>
+
+      <a class="card" href="./sdk/">
+        <h2>SDK reference &rarr;</h2>
+        <span>Classes, methods, and types you call from TypeScript.</span>
+      </a>
+
+      <a class="card" href="./api/">
+        <h2>REST API reference &rarr;</h2>
+        <span>The underlying HTTP endpoints, browsable with Scalar.</span>
+      </a>
+
+      <footer>
+        Wired Variables request and response shapes are inferred ahead of the
+        public release and may change.
+      </footer>
+    </main>
+  </body>
+</html>
