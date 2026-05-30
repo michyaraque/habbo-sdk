@@ -7,6 +7,10 @@
     "name": "Michael Araque (cebolla1)",
     "url": "https://github.com/michyaraque"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michyaraque/habbo-sdk"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
