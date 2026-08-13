@@ -10,8 +10,9 @@ import type { ResolvedConfig } from "../config.js";
 import type {
   Achievement,
   Badge,
-  BadgeOwner,
+  BadgeOwners,
   Group,
+  GroupMember,
   Habbo,
   MarketplaceStats,
   MarketplaceStatsQuery,
@@ -130,6 +131,11 @@ export class ProfilesResource {
    *
    * @param uniqueId - The user's unique identifier. Omit to retrieve the
    *   hotel-wide latest photos.
+   *
+   * @remarks
+   * These photo endpoints live under `/extradata` rather than `/api/public` and
+   * are not part of the documented API, so their response may change without
+   * notice.
    */
   getPhotos(uniqueId?: string): Promise<Photo[]> {
     const path =
@@ -160,15 +166,21 @@ export class ProfilesResource {
   }
 
   /**
-   * Fetches the owners of a badge.
+   * Fetches how many users own a badge, along with the badge's name and
+   * description.
    *
-   * @param badgeCode - The badge code to resolve owners for.
+   * The endpoint reports a count, not the list of owners.
    *
-   * @remarks
-   * UNVERIFIED: the response shape is inferred and may change.
+   * @param badgeCode - The badge code to look up.
+   *
+   * @example
+   * ```ts
+   * const badge = await habbo.profiles.getBadgeOwners("ACH_BasicClub1");
+   * console.log(badge.ownerCount);
+   * ```
    */
-  getBadgeOwners(badgeCode: string): Promise<BadgeOwner[]> {
-    return this.http.request<BadgeOwner[]>({
+  getBadgeOwners(badgeCode: string): Promise<BadgeOwners> {
+    return this.http.request<BadgeOwners>({
       url: this.base(`/api/public/badge/owners/${encodeURIComponent(badgeCode)}`),
     });
   }
@@ -201,26 +213,49 @@ export class ProfilesResource {
   /**
    * Fetches marketplace statistics for several furni in a single request.
    *
-   * @param queries - The furni to look up stats for.
+   * Floor items and wall items are requested separately and come back in
+   * matching fields of the response.
    *
-   * @remarks
-   * UNVERIFIED: the request and response shapes are inferred and may change.
+   * @param query - The floor and wall items to look up.
+   *
+   * @example
+   * ```ts
+   * const stats = await habbo.profiles.getMarketplaceStats({
+   *   roomItems: [{ item: "throne" }],
+   *   wallItems: [{ item: "rare_dragonlamp" }],
+   * });
+   *
+   * console.log(stats.roomItemData[0]?.currentPrice);
+   * ```
    */
-  getMarketplaceStats(queries: MarketplaceStatsQuery[]): Promise<MarketplaceStats[]> {
-    return this.http.request<MarketplaceStats[]>({
+  getMarketplaceStats(query: MarketplaceStatsQuery): Promise<MarketplaceStats> {
+    return this.http.request<MarketplaceStats>({
       method: "POST",
       url: this.base("/api/public/marketplace/stats/batch"),
-      body: queries,
+      body: query,
     });
   }
 
   /**
    * Pings the public API to check availability.
    *
-   * @returns Resolves when the endpoint responds successfully.
+   * A healthy hotel replies `200` with an empty body, so this resolves on
+   * success and throws otherwise.
+   *
+   * @throws {@link MaintenanceError} when the hotel is under maintenance.
+   * @throws {@link HabboNetworkError} when the hotel is unreachable.
+   *
+   * @example
+   * ```ts
+   * try {
+   *   await habbo.profiles.ping();
+   * } catch {
+   *   // the hotel is unavailable
+   * }
+   * ```
    */
-  ping(): Promise<void> {
-    return this.http.request<void>({ url: this.base("/api/public/ping") });
+  async ping(): Promise<void> {
+    await this.http.request<string>({ url: this.base("/api/public/ping"), raw: true });
   }
 
   /**
@@ -237,10 +272,19 @@ export class ProfilesResource {
   /**
    * Fetches the members of a group.
    *
+   * Members carry their avatar in `habboFigure` rather than the `figureString`
+   * used elsewhere, so they have their own {@link GroupMember} type.
+   *
    * @param groupId - The unique group identifier.
+   *
+   * @example
+   * ```ts
+   * const members = await habbo.profiles.getGroupMembers("g-hhes-...");
+   * const admins = members.filter((member) => member.isAdmin);
+   * ```
    */
-  getGroupMembers(groupId: string): Promise<Habbo[]> {
-    return this.http.request<Habbo[]>({
+  getGroupMembers(groupId: string): Promise<GroupMember[]> {
+    return this.http.request<GroupMember[]>({
       url: this.base(`/api/public/groups/${encodeURIComponent(groupId)}/members`),
     });
   }

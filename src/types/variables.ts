@@ -1,166 +1,517 @@
 /**
  * Type definitions for the Wired Variables API (`variables` resource).
- *
- * These cover wired variable reads and writes as well as the variable profile
- * endpoints, under `/rooms/{roomId}/variables` and
- * `/rooms/{roomId}/variables_profile`.
- *
- * @remarks
- * UNVERIFIED: the endpoint paths and HTTP methods are confirmed, but some
- * request and response body shapes in this module are inferred ahead of the
- * public release and may change once it is available.
  */
 
 /**
  * The scope a wired variable is bound to.
  *
- * - `user` and `furni` variables are scoped to a specific entity within a room.
- * - `global` variables are scoped to the room as a whole.
+ * - `user` variables are attached to a user, a pet, or a bot.
+ * - `furni` variables are attached to a floor item or a wall item.
+ * - Global variables are room-wide and use their own dedicated routes, so they
+ *   are not part of this union.
  */
-export type VariableScope = "user" | "furni" | "global";
+export type VariableScope = "user" | "furni";
 
 /**
- * The kind of entity a scoped variable is attached to.
+ * Target kinds valid when {@link VariableScope} is `user`.
+ */
+export type UserTargetKind = "users" | "pets" | "bots";
+
+/**
+ * Target kinds valid when {@link VariableScope} is `furni`.
+ */
+export type FurniTargetKind = "furni" | "furni-bc" | "wall-items" | "wall-items-bc";
+
+/**
+ * Any target kind accepted by the scoped variable routes.
+ */
+export type TargetKind = UserTargetKind | FurniTargetKind;
+
+/**
+ * Maps a scope onto the target kinds the API accepts for it, so an invalid
+ * scope/kind pairing such as `("user", "wall-items")` fails to compile.
+ */
+export type TargetKindFor<S extends VariableScope> = S extends "user"
+  ? UserTargetKind
+  : FurniTargetKind;
+
+/**
+ * The value type a wired variable can hold.
  *
- * `user` covers users, pets, and bots on the user-scoped endpoints; `furni`
- * covers furniture on the furni-scoped endpoints.
+ * The API stores wired variables as whole numbers only; strings and booleans
+ * are rejected. Values are validated by {@link assertVariableValue} before any
+ * write leaves the SDK.
  */
-export type TargetKind = string;
+export type VariableValue = number;
 
 /**
- * The primitive value types a wired variable can hold.
- */
-export type VariableValue = string | number | boolean;
-
-/**
- * A wired variable as returned by the read endpoints.
+ * A stored wired variable value together with its timestamps.
  */
 export interface WiredVariable {
-  /** The variable name. */
-  name: string;
-  /** The scope the variable is bound to. */
-  scope: VariableScope;
-  /** The target kind, present for non-global scopes. */
-  targetKind?: TargetKind;
-  /** The identifier of the entity the variable is attached to, for scoped variables. */
-  entityId?: string;
-  /** The current value. */
-  value: VariableValue;
-  /** ISO 8601 timestamp of the last update, when reported by the server. */
-  updatedAt?: string;
-}
-
-/**
- * Payload used to set or update a single wired variable value.
- */
-export interface SetVariableInput {
-  /** The new value to assign. */
-  value: VariableValue;
-}
-
-/**
- * Common response envelope returned by the Wired Variables API.
- */
-export interface ApiEnvelope {
-  status: string;
-  errors: string[];
-  errorDetails: Record<string, unknown>;
-  userStatus?: string | null;
-}
-
-/**
- * A stored variable entry with creation and update timestamps.
- */
-export interface VariableEntry {
-  value: VariableValue;
+  /** The current numeric value. */
+  value: number;
+  /** ISO 8601 timestamp of when the value was first stored. */
   creation_time: string;
+  /** ISO 8601 timestamp of the most recent update. */
   update_time: string;
 }
 
 /**
- * A single operation within a batch request.
+ * The variable names configured in a room, grouped by scope.
  *
- * The `op_id` is a caller-supplied identifier used to correlate results.
- * `method` and `path` describe the sub-request; `body` carries the payload
- * for mutating methods.
+ * Returned by {@link VariablesResource.list}. These are names only: use the
+ * scoped read methods to fetch values.
  */
-export interface BatchOperation {
-  /** Caller-supplied identifier to correlate this operation with its result. */
-  op_id: string;
-  /** HTTP method for the sub-request. */
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  /** Path of the sub-request, e.g. `/pets/119`. */
-  path: string;
-  /** Optional body for mutating sub-requests. */
-  body?: { value: VariableValue };
+export interface RoomVariables {
+  /** Names of the user-scoped variables. */
+  users: string[];
+  /** Names of the furni-scoped variables. */
+  furni: string[];
+  /** Names of the room-wide global variables. */
+  global: string[];
 }
 
 /**
- * A single result entry within a batch response.
+ * A single entry of a paged variable listing: the stored value plus the entity
+ * it belongs to.
  */
-export interface BatchResultItem {
-  /** HTTP status code of the sub-request. */
-  status: number;
-  /** The resulting variable entry. */
-  body: VariableEntry;
+export interface PagedVariableItem extends WiredVariable {
+  /** Identifier of the entity holding this value, when reported. */
+  id?: number;
+  /** Display name of the entity, for target kinds that have one. */
+  name?: string;
+  /** Unique identifier of the entity, for user targets. */
+  unique_id?: string;
+  /** Any additional fields the server may add for a given target kind. */
+  [key: string]: unknown;
 }
 
 /**
- * Result of executing a batch of variable operations.
+ * One page of variable values for a target kind, as returned by
+ * {@link VariablesResource.listByKind}.
  */
-export interface BatchResult extends ApiEnvelope {
-  content?: {
-    results: BatchResultItem[];
-  };
+export interface PagedVariables {
+  /** The values on this page. */
+  items: PagedVariableItem[];
+  /** The zero-based page index this result represents. */
+  page: number;
+  /** The page size used to produce this result. */
+  size: number;
 }
 
 /**
- * Payload identifying the variable names to remove in a bulk delete request.
+ * Query options accepted by {@link VariablesResource.listByKind}.
+ */
+export interface ListByKindOptions {
+  /**
+   * The field to sort by.
+   *
+   * @defaultValue the server's own ordering
+   */
+  orderBy?: "value" | "creation_time" | "update_time";
+  /**
+   * The sort direction.
+   *
+   * @defaultValue the server's own direction
+   */
+  orderDir?: "asc" | "desc";
+  /** Zero-based page index. */
+  page?: number;
+  /** Number of items per page. */
+  size?: number;
+}
+
+/**
+ * Request body used to write a single variable value.
+ */
+export interface ValueWriteInput {
+  /** The whole number to store. */
+  value: VariableValue;
+}
+
+/**
+ * A map of variable names to their stored values, as held by a variables
+ * profile.
+ */
+export type VariableMap = Record<string, WiredVariable>;
+
+/**
+ * A floor or wall item a variables profile belongs to. Items are identified by
+ * id alone.
+ */
+export interface ItemProfileTarget {
+  /** Numeric identifier of the item. */
+  id: number;
+}
+
+/**
+ * A pet or bot a variables profile belongs to.
+ */
+export interface NamedProfileTarget extends ItemProfileTarget {
+  /** Display name of the pet or bot. */
+  name?: string;
+}
+
+/**
+ * The user a variables profile belongs to.
+ */
+export interface UserProfileTarget extends NamedProfileTarget {
+  /** The user's Habbo unique id. */
+  unique_id?: string;
+}
+
+/**
+ * Any entity a variables profile can belong to.
+ *
+ * Which fields are present depends on the target: users carry `name` and
+ * `unique_id`, pets and bots carry `name`, and items carry only `id`.
+ */
+export type ProfileTarget = UserProfileTarget;
+
+/**
+ * The variables profile of a user.
+ */
+export interface UserProfile {
+  /** The user the profile belongs to. */
+  user: UserProfileTarget;
+  /** The user's variables, keyed by name. */
+  variables: VariableMap;
+}
+
+/**
+ * The variables profile of a pet.
+ */
+export interface PetProfile {
+  /** The pet the profile belongs to. */
+  pet: NamedProfileTarget;
+  /** The pet's variables, keyed by name. */
+  variables: VariableMap;
+}
+
+/**
+ * The variables profile of a bot.
+ */
+export interface BotProfile {
+  /** The bot the profile belongs to. */
+  bot: NamedProfileTarget;
+  /** The bot's variables, keyed by name. */
+  variables: VariableMap;
+}
+
+/**
+ * The variables profile of a floor item.
+ */
+export interface FurniProfile {
+  /** The furni the profile belongs to. */
+  furni: ItemProfileTarget;
+  /** The furni's variables, keyed by name. */
+  variables: VariableMap;
+}
+
+/**
+ * The variables profile of a builders-club floor item.
+ */
+export interface FurniBcProfile {
+  /** The builders-club furni the profile belongs to. */
+  furni_bc: ItemProfileTarget;
+  /** The furni's variables, keyed by name. */
+  variables: VariableMap;
+}
+
+/**
+ * The variables profile of a wall item.
+ */
+export interface WallItemProfile {
+  /** The wall item the profile belongs to. */
+  wall_item: ItemProfileTarget;
+  /** The wall item's variables, keyed by name. */
+  variables: VariableMap;
+}
+
+/**
+ * The variables profile of a builders-club wall item.
+ */
+export interface WallItemBcProfile {
+  /** The builders-club wall item the profile belongs to. */
+  wall_item_bc: ItemProfileTarget;
+  /** The wall item's variables, keyed by name. */
+  variables: VariableMap;
+}
+
+/**
+ * The room-wide variables profile, which has no owning entity.
+ */
+export interface GlobalProfile {
+  /** The room's global variables, keyed by name. */
+  variables: VariableMap;
+}
+
+/**
+ * Any profile returned by the user-scoped profile routes.
+ *
+ * Narrow it by checking which owner key is present:
+ *
+ * ```ts
+ * if ("pet" in profile) {
+ *   console.log(profile.pet.name);
+ * }
+ * ```
+ */
+export type AnyUserProfile = UserProfile | PetProfile | BotProfile;
+
+/**
+ * Any profile returned by the furni-scoped profile routes.
+ */
+export type AnyFurniProfile =
+  | FurniProfile
+  | FurniBcProfile
+  | WallItemProfile
+  | WallItemBcProfile;
+
+/**
+ * Any variables profile the API can return.
+ */
+export type VariablesProfile = AnyUserProfile | AnyFurniProfile | GlobalProfile;
+
+/**
+ * Maps a user target kind onto the exact profile type that route returns, so
+ * `get("users", …)` narrows to {@link UserProfile} without a manual cast.
+ */
+export type UserProfileFor<K extends UserTargetKind> = K extends "users"
+  ? UserProfile
+  : K extends "pets"
+    ? PetProfile
+    : BotProfile;
+
+/**
+ * Maps a furni target kind onto the exact profile type that route returns.
+ */
+export type FurniProfileFor<K extends FurniTargetKind> = K extends "furni"
+  ? FurniProfile
+  : K extends "furni-bc"
+    ? FurniBcProfile
+    : K extends "wall-items"
+      ? WallItemProfile
+      : WallItemBcProfile;
+
+/**
+ * Patch body for a user, pet, bot, or furni variables profile.
+ *
+ * Only the listed variables are touched. A `null` value deletes the stored
+ * value for that variable; the variable itself stays configured in the room.
+ */
+export interface VariablesPatch {
+  /** Variable names mapped to a new value, or to `null` to delete the value. */
+  variables: Record<string, VariableValue | null>;
+}
+
+/**
+ * Patch body for the global variables profile.
+ *
+ * Unlike scoped profiles, global variables cannot be deleted through a patch,
+ * so `null` is not accepted here.
+ */
+export interface GlobalVariablesPatch {
+  /** Variable names mapped to their new values. */
+  variables: Record<string, VariableValue>;
+}
+
+/**
+ * Body carried by `PUT` and `PATCH` batch operations.
+ */
+export interface BatchOperationBody {
+  /** The whole number to store. */
+  value: VariableValue;
+}
+
+/**
+ * A single operation inside a batch request.
+ *
+ * All operations in one batch act on the variable named in the route; `path`
+ * selects the entity, in the form `<targetKind>/<entityId>` with no leading
+ * slash, for example `users/44`.
+ */
+export type BatchOperation =
+  | { op_id?: string; method: "GET"; path: string }
+  | { op_id?: string; method: "DELETE"; path: string }
+  | { op_id?: string; method: "PUT"; path: string; body: BatchOperationBody }
+  | { op_id?: string; method: "PATCH"; path: string; body: BatchOperationBody };
+
+/**
+ * The error reported for a failed operation within a batch.
+ */
+export interface BatchOperationError {
+  /** Machine-readable error code, e.g. `wired.variables.invalid_target`. */
+  code: string;
+  /** Human-readable message. The server currently mirrors the code here. */
+  message: string;
+}
+
+/**
+ * The result of a single batch operation.
+ *
+ * Narrow on `status`: `200` carries a `body`, `204` carries neither `body` nor
+ * `error`, and any other status carries an `error`. The helper
+ * {@link isBatchOperationSuccess} does this narrowing for you.
+ */
+export type BatchOperationResult =
+  | { op_id?: string | null; status: 200; body: WiredVariable }
+  | { op_id?: string | null; status: 204 }
+  | { op_id?: string | null; status: 400 | 403 | 404 | 429 | 500; error: BatchOperationError };
+
+/**
+ * Narrows a {@link BatchOperationResult} to the operations that succeeded.
+ *
+ * @param result - A single result from a {@link BatchResults} response.
+ * @returns `true` when the operation returned `200` or `204`.
+ *
+ * @example
+ * ```ts
+ * const { results } = await habbo.variables.batch(796, "user", "coins")
+ *   .patch("users/44", 7)
+ *   .execute();
+ *
+ * const failed = results.filter((r) => !isBatchOperationSuccess(r));
+ * ```
+ */
+export function isBatchOperationSuccess(
+  result: BatchOperationResult,
+): result is Extract<BatchOperationResult, { status: 200 | 204 }> {
+  return result.status === 200 || result.status === 204;
+}
+
+/**
+ * The response of a batch request: one result per submitted operation, in the
+ * order the operations were sent.
+ */
+export interface BatchResults {
+  /** One entry per operation in the request. */
+  results: BatchOperationResult[];
+}
+
+/**
+ * The body of a batch request.
+ *
+ * Built for you by {@link BatchBuilder}; you only need this type when you
+ * assemble a batch by hand.
+ */
+export interface BatchRequest {
+  /** Between 1 and {@link BATCH_MAX_OPERATIONS} operations. */
+  requests: BatchOperation[];
+}
+
+/**
+ * The response of the variable count endpoint.
+ *
+ * {@link VariablesResource.count} unwraps this and returns the number directly.
+ */
+export interface VariableCount {
+  /** How many values are stored. */
+  count: number;
+}
+
+/**
+ * Request body listing the variables whose stored values should be deleted.
  */
 export interface BulkDeleteInput {
-  /** The variable names to delete across the room. */
+  /**
+   * Names of user or furni variables whose stored values will be deleted. The
+   * variable definitions themselves remain configured in the room.
+   */
   variables: string[];
 }
 
 /**
- * Result of a bulk delete request.
+ * The machine-readable error codes the Wired Variables API can return.
+ *
+ * Read it off `error.body` to tell apart failures that share an HTTP status.
+ * A `403`, for instance, means a bad key, a room with the API switched off, or
+ * an operation the room does not permit — three very different fixes.
+ *
+ * Unknown strings are allowed so a newly added code does not break typing.
+ *
+ * | Code | HTTP | Meaning |
+ * | --- | --- | --- |
+ * | `wired.variables.invalid_target` | 400 | The target kind or entity id is not valid for the scope. |
+ * | `wired.variables.invalid_value` | 400 | The value is not an accepted whole number. |
+ * | `wired.variables.bulk_delete_empty` | 400 | The bulk delete listed no variables. |
+ * | `wired.variables.bulk_delete_invalid_variable` | 400 | A named variable is not configured in the room. |
+ * | `wired.variables.batch_empty` | 400 | The batch carried no operations. |
+ * | `wired.variables.batch_limit_exceeded` | 400 | The batch exceeded 50 operations. |
+ * | `wired.variables.key_missing` | 403 | No key was sent. |
+ * | `wired.variables.key_invalid` | 403 | The key does not match the room. |
+ * | `wired.variables.api_disabled` | 403 | The room has the API switched off. |
+ * | `wired.variables.user_not_participating` | 403 | The user is not taking part in the room. |
+ * | `wired.variables.operation_not_allowed` | 403 | The room does not permit this operation. |
+ * | `wired.variables.bulk_delete_not_enabled` | 403 | The room does not permit bulk deletes. |
+ * | `room.not_found` | 404 | No such room. |
+ * | `wired.variables.not_found` | 404 | No such variable. |
+ * | `wired.variables.entity_not_found` | 404 | No such user, pet, bot, or item. |
+ * | `wired.variables.too_many_requests` | 429 | Rate limit exceeded. |
+ *
+ * @example
+ * ```ts
+ * import { HabboAuthError, type WiredErrorBody } from "habbo-sdk";
+ *
+ * try {
+ *   await habbo.variables.updateGlobal(796, "jackpot", 10);
+ * } catch (error) {
+ *   if (error instanceof HabboAuthError) {
+ *     const code = (error.body as WiredErrorBody | undefined)?.error;
+ *     if (code === "wired.variables.api_disabled") {
+ *       // the room owner has to switch the API on
+ *     }
+ *   }
+ * }
+ * ```
  */
-export interface BulkDeleteResult extends ApiEnvelope {
-  content?: {
-    deleted: number;
-  };
+export type WiredErrorCode =
+  | "wired.variables.invalid_target"
+  | "wired.variables.invalid_value"
+  | "wired.variables.bulk_delete_empty"
+  | "wired.variables.bulk_delete_invalid_variable"
+  | "wired.variables.batch_empty"
+  | "wired.variables.batch_limit_exceeded"
+  | "wired.variables.key_missing"
+  | "wired.variables.key_invalid"
+  | "wired.variables.api_disabled"
+  | "wired.variables.user_not_participating"
+  | "wired.variables.operation_not_allowed"
+  | "wired.variables.bulk_delete_not_enabled"
+  | "room.not_found"
+  | "wired.variables.not_found"
+  | "wired.variables.entity_not_found"
+  | "wired.variables.too_many_requests"
+  | (string & {});
+
+/**
+ * The error body returned by the Wired Variables API on a failed request.
+ *
+ * Reachable through the `body` of any thrown {@link HabboError}.
+ */
+export interface WiredErrorBody {
+  /** The error code. See {@link WiredErrorCode}. */
+  error: WiredErrorCode;
 }
 
 /**
- * A variables profile: the full set of variables attached to a single entity,
- * keyed by variable name.
+ * The maximum number of operations the API accepts in a single batch request.
  */
-export type VariablesProfile = Record<string, VariableEntry>;
+export const BATCH_MAX_OPERATIONS = 50;
 
 /**
- * The response envelope for variables profile endpoints.
- */
-export interface VariablesProfileResult extends ApiEnvelope {
-  content?: {
-    variables: VariablesProfile;
-  };
-}
-
-/**
- * Payload used to patch a variables profile.
+ * Throws when a value is not a safe integer, matching the API's own contract.
  *
- * Provide only the keys to change. Setting a value to `null` removes the
- * corresponding variable.
+ * Wired variables are whole numbers; the SDK rejects anything else up front so
+ * callers get a precise error instead of an opaque `400` from the server.
  *
- * @remarks UNVERIFIED: null-removal behavior is inferred and may change.
+ * @param value - The value about to be written.
+ * @throws {@link TypeError} when the value is not a safe integer.
  */
-export type VariablesProfilePatch = {
-  variables: Record<string, VariableValue | null>;
-};
-
-/**
- * Result of setting a single variable in the global profile.
- */
-export interface SetVariableResult extends ApiEnvelope {
-  content?: VariableEntry;
+export function assertVariableValue(value: number): void {
+  if (!Number.isSafeInteger(value)) {
+    throw new TypeError(
+      `Wired variable values must be whole numbers within the safe integer range. Received: ${String(value)}`,
+    );
+  }
 }

@@ -28,19 +28,45 @@ export {
 export type { FetchLike } from "./http.js";
 
 export type { ProfilesResource } from "./resources/profiles.js";
+export type { OriginsResource } from "./resources/origins.js";
+
 export type {
+  Derby,
+  DerbyInfo,
+  DerbyMetadata,
+  DerbyParticipant,
+  DerbyStatus,
+  DerbyStatusResponse,
+  HistoryQuery,
+  Match,
+  MatchInfo,
+  MatchMetadata,
+  MatchParticipant,
+  MatchTeam,
+  PlayerSkill,
+  SkillLeaderboard,
+  SkillLeaderboardEntry,
+  SkillType,
+} from "./types/origins.js";
+export type {
+  RoomId,
   VariablesResource,
   VariablesProfileResource,
 } from "./resources/variables.js";
 export { BatchBuilder } from "./resources/batch-builder.js";
-export type { BatchExecutor } from "./resources/batch-builder.js";
+export type { BatchExecutor, BatchOperationOptions } from "./resources/batch-builder.js";
 
 export type {
   Achievement,
+  AchievementDefinition,
+  AchievementLevelRequirement,
   Badge,
-  BadgeOwner,
+  BadgeOwners,
   Group,
+  GroupMember,
   Habbo,
+  MarketplaceHistoryPoint,
+  MarketplaceItemStats,
   MarketplaceStats,
   MarketplaceStatsQuery,
   Photo,
@@ -48,16 +74,53 @@ export type {
   Room,
 } from "./types/profiles.js";
 
+export {
+  BATCH_MAX_OPERATIONS,
+  assertVariableValue,
+  isBatchOperationSuccess,
+} from "./types/variables.js";
+
 export type {
+  AnyFurniProfile,
+  AnyUserProfile,
   BatchOperation,
-  BatchResult,
+  BatchOperationBody,
+  BatchOperationError,
+  BatchOperationResult,
+  BatchRequest,
+  BatchResults,
+  BotProfile,
   BulkDeleteInput,
-  BulkDeleteResult,
-  SetVariableInput,
+  FurniBcProfile,
+  FurniProfile,
+  FurniProfileFor,
+  FurniTargetKind,
+  GlobalProfile,
+  GlobalVariablesPatch,
+  ListByKindOptions,
+  PagedVariableItem,
+  PagedVariables,
+  PetProfile,
+  ItemProfileTarget,
+  NamedProfileTarget,
+  ProfileTarget,
+  UserProfileTarget,
+  RoomVariables,
   TargetKind,
+  TargetKindFor,
+  UserProfile,
+  UserProfileFor,
+  UserTargetKind,
+  ValueWriteInput,
+  VariableCount,
+  VariableMap,
   VariableScope,
   VariableValue,
+  VariablesPatch,
   VariablesProfile,
-  VariablesProfilePatch,
+  WallItemBcProfile,
+  WallItemProfile,
+  WiredErrorBody,
+  WiredErrorCode,
   WiredVariable,
 } from "./types/variables.js";

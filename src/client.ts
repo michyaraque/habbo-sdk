@@ -4,6 +4,7 @@
 
 import { type HabboClientConfig, resolveConfig } from "./config.js";
 import { HttpClient } from "./http.js";
+import { OriginsResource } from "./resources/origins.js";
 import { ProfilesResource } from "./resources/profiles.js";
 import { VariablesResource } from "./resources/variables.js";
 
@@ -21,19 +22,26 @@ import { VariablesResource } from "./resources/variables.js";
  * import { HabboClient } from "habbo-sdk";
  *
  * const habbo = new HabboClient({
- *   writeKey: process.env.WIRED_WRITE_KEY,
  *   hotel: "es",
+ *   readKey: process.env.WIRED_READ_KEY,
+ *   writeKey: process.env.WIRED_WRITE_KEY,
  * });
  *
  * const user = await habbo.profiles.get("Cebolla1");
- * const variables = await habbo.variables.list("796");
- * await habbo.variables.updateGlobal("796", "scoreboard", 10);
+ * const names = await habbo.variables.list(796);
+ * await habbo.variables.updateGlobal(796, "jackpot", 1500);
  * ```
  *
  * @example
- * Passing only a write key as a string is shorthand for `{ writeKey }`:
+ * A read-only client needs no write key:
  * ```ts
- * const habbo = new HabboClient(process.env.WIRED_WRITE_KEY!);
+ * const habbo = new HabboClient({ readKey: process.env.WIRED_READ_KEY });
+ * ```
+ *
+ * @example
+ * A bare string is used as both the read and the write key:
+ * ```ts
+ * const habbo = new HabboClient(process.env.WIRED_KEY!);
  * ```
  */
 export class HabboClient {
@@ -43,16 +51,23 @@ export class HabboClient {
   public readonly profiles: ProfilesResource;
 
   /**
-   * The Wired Variables API resource. Requires a configured `writeKey`; the
-   * server URL defaults to `https://www.habbo.<hotel>/server/v1`.
+   * The Wired Variables API resource. Reads require a configured `readKey` and
+   * writes a `writeKey`; both are issued from the room's Wired settings.
    */
   public readonly variables: VariablesResource;
+
+  /**
+   * The Habbo Origins resource: minigame matches, the fishing derby, and skill
+   * leaderboards. Requires no authentication, though the derby endpoints accept
+   * an optional `originsApiKey`.
+   */
+  public readonly origins: OriginsResource;
 
   /**
    * Creates a new client.
    *
    * @param config - Either a full {@link HabboClientConfig} object, or a bare
-   *   `X-Wired-Write-Key` string as shorthand for `{ writeKey }`.
+   *   string used as both the read and the write key.
    */
   constructor(config: string | HabboClientConfig) {
     const resolved = resolveConfig(config);
@@ -65,5 +80,6 @@ export class HabboClient {
 
     this.profiles = new ProfilesResource(http, resolved);
     this.variables = new VariablesResource(http, resolved);
+    this.origins = new OriginsResource(http, resolved);
   }
 }

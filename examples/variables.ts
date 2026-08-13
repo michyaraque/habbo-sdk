@@ -1,59 +1,89 @@
 /**
  * Wired Variables API example: authenticated reads and writes.
  *
- * Replace WRITE_KEY with the X-Wired-Write-Key for your room, then run with:
- *   pnpm tsx examples/variables.ts
+ * Set the two keys from your room's Wired settings, then run:
+ *   pnpm example:variables
  *
- * The Wired server base URL is derived from the hotel as
- * https://www.habbo.<hotel>/server/v1.
+ * Reads use X-Wired-Read-Key, writes use X-Wired-Write-Key, and a batch, which
+ * may mix both, sends the two.
  */
 
-import { HabboClient, HabboNotFoundError } from "../src/index.js";
+import { HabboClient, HabboNotFoundError, isBatchOperationSuccess } from "../src/index.js";
 
-const WRITE_KEY = "your-x-wired-write-key";
-const ROOM_ID = "796";
+const ROOM_ID = 796;
 
-const habbo = new HabboClient({ hotel: "es", writeKey: WRITE_KEY });
+const habbo = new HabboClient({
+  hotel: "es",
+  readKey: process.env["WIRED_READ_KEY"] ?? "your-x-wired-read-key",
+  writeKey: process.env["WIRED_WRITE_KEY"] ?? "your-x-wired-write-key",
+});
 
-const variables = await habbo.variables.list(ROOM_ID);
-console.log(`Room ${ROOM_ID} has ${variables.length} wired variable(s).`);
-for (const variable of variables.slice(0, 5)) {
-  console.log(`  ${variable.scope}/${variable.name} = ${String(variable.value)}`);
+// Which variables the room has configured, grouped by scope.
+const names = await habbo.variables.list(ROOM_ID);
+console.log(`Room ${ROOM_ID} variables`);
+console.log(`  user:   ${names.users.join(", ") || "(none)"}`);
+console.log(`  furni:  ${names.furni.join(", ") || "(none)"}`);
+console.log(`  global: ${names.global.join(", ") || "(none)"}`);
+
+// A global variable: read it, then increment it.
+const jackpot = await habbo.variables.getGlobal(ROOM_ID, "jackpot").catch((error: unknown) => {
+  if (error instanceof HabboNotFoundError) {
+    return undefined;
+  }
+  throw error;
+});
+
+const current = jackpot?.value ?? 0;
+const updated = await habbo.variables.updateGlobal(ROOM_ID, "jackpot", current + 100);
+console.log(`\njackpot: ${current} -> ${updated.value}`);
+
+// A user-scoped variable: write it, then read it back.
+await habbo.variables.set(ROOM_ID, "user", "coins", "users", 44, 50);
+const coins = await habbo.variables.get(ROOM_ID, "user", "coins", "users", 44);
+console.log(`coins for user 44: ${coins.value} (updated ${coins.update_time})`);
+
+// A leaderboard: the ten highest scores, with the players who hold them.
+const top = await habbo.variables.listByKind(ROOM_ID, "user", "score", "users", {
+  orderBy: "value",
+  orderDir: "desc",
+  size: 10,
+});
+console.log("\nTop scores");
+for (const [index, entry] of top.items.entries()) {
+  console.log(`  ${index + 1}. ${entry.name ?? entry.id} — ${entry.value}`);
 }
 
-// Global variable: read, then increment.
-const scoreboardResult = await habbo.variables
-  .getGlobal(ROOM_ID, "scoreboard")
-  .catch((error: unknown) => {
-    if (error instanceof HabboNotFoundError) {
-      return undefined;
-    }
-    throw error;
-  });
-const current = typeof scoreboardResult?.value === "number" ? scoreboardResult.value : 0;
-const updated = await habbo.variables.updateGlobal(ROOM_ID, "scoreboard", current + 1);
-console.log(`\nscoreboard: ${current} -> ${String(updated.value)}`);
+// Every variable of one user in a single request, rather than one call each.
+const profile = await habbo.variables.profiles.getUser(ROOM_ID, "users", 44);
+console.log(`\n${profile.user.name ?? profile.user.id} has:`);
+for (const [name, variable] of Object.entries(profile.variables)) {
+  console.log(`  ${name} = ${variable.value}`);
+}
 
-// Scoped user variable: set then read back.
-await habbo.variables.set(ROOM_ID, "user", "coins", "user", "12345", 50);
-const coins = await habbo.variables.get(ROOM_ID, "user", "coins", "user", "12345");
-console.log(`user coins for 12345: ${String(coins.value)}`);
-
-// Variables profile: patch several keys at once (null removes a key).
-const updatedProfile = await habbo.variables.profiles.patchUser(ROOM_ID, "user", "12345", {
-  variables: {
-    coins: 75,
-    level: 3,
-    temporaryFlag: null,
-  },
+// Patch several variables at once. null deletes the stored value.
+await habbo.variables.profiles.patchUser(ROOM_ID, "users", 44, {
+  coins: 75,
+  level: 3,
+  temporary_flag: null,
 });
-console.log("patched profile:", updatedProfile.content?.variables);
 
-// Batch: chain operations against one variable, then execute as one request.
-const result = await habbo.variables
-  .batch(ROOM_ID, "user", "coins")
-  .patch("user:111", "/users/111", 10)
-  .patch("user:222", "/users/222", 20)
-  .delete("user:333", "/users/333")
+// A batch: many entities, one variable, one request.
+const { results } = await habbo.variables
+  .batch(ROOM_ID, "user", "score")
+  .patch("users/44", 10, { opId: "winner" })
+  .patch("users/45", 7)
+  .delete("users/46")
   .execute();
-console.log(`batch results: ${result.content?.results.length ?? 0}`);
+
+console.log(`\nbatch: ${results.length} operation(s)`);
+for (const result of results) {
+  if (isBatchOperationSuccess(result)) {
+    console.log(`  ${result.op_id ?? "-"} ok (${result.status})`);
+  } else {
+    console.log(`  ${result.op_id ?? "-"} failed: ${result.error.code}`);
+  }
+}
+
+// Reset the round: clears every stored value of these variables.
+await habbo.variables.bulkDelete(ROOM_ID, ["score"]);
+console.log("\nscores cleared");

@@ -33,8 +33,10 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
+    "test": "tsx test/variables.test.ts && tsx test/public.test.ts",
     "example:profiles": "tsx examples/profiles.ts",
     "example:variables": "tsx examples/variables.ts",
+    "example:origins": "tsx examples/origins.ts",
     "docs": "typedoc",
     "docs:serve": "npx --yes http-server docs -p 8080 -c-1"
   },

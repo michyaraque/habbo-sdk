@@ -1,37 +1,58 @@
 /**
  * Fluent builder for batches of wired variable operations.
  *
- * Each operation maps to a sub-request with an `op_id`, HTTP `method`, `path`,
- * and optional `body`. Chain calls to queue operations, then call `execute()`
- * to dispatch them in one request.
+ * A batch acts on a single variable, named when the builder is created, and can
+ * touch up to {@link BATCH_MAX_OPERATIONS} different entities in one request.
+ * Reads and writes may be mixed freely.
+ *
+ * Every method takes a `path` of the form `<targetKind>/<entityId>`, without a
+ * leading slash, for example `users/44` or `furni/5521`.
  *
  * @example
  * ```ts
- * const result = await habbo.variables
- *   .batch("796", "user", "coins")
- *   .patch("pets:119", "/pets/119", 10)
- *   .patch("pets:120", "/pets/120", 5)
+ * const { results } = await habbo.variables
+ *   .batch(796, "user", "score")
+ *   .get("users/44")
+ *   .patch("users/45", 10)
+ *   .delete("pets/12")
  *   .execute();
  * ```
  */
 
-import type {
-  BatchOperation,
-  BatchResult,
-  VariableValue,
+import {
+  BATCH_MAX_OPERATIONS,
+  assertVariableValue,
+  type BatchOperation,
+  type BatchRequest,
+  type BatchResults,
+  type VariableValue,
 } from "../types/variables.js";
 
 /**
- * The transport callback used by a {@link BatchBuilder} to dispatch its
- * accumulated operations. Supplied by the {@link VariablesResource}.
+ * The transport callback a {@link BatchBuilder} uses to dispatch its operations.
+ * Supplied by {@link VariablesResource.batch}.
  */
-export type BatchExecutor = (operations: BatchOperation[]) => Promise<BatchResult>;
+export type BatchExecutor = (
+  operations: BatchRequest["requests"],
+) => Promise<BatchResults>;
 
 /**
- * Accumulates wired variable operations and executes them as one batch.
+ * Options shared by every builder method.
+ */
+export interface BatchOperationOptions {
+  /**
+   * A caller-supplied identifier echoed back on the matching result, which lets
+   * you correlate results with your own records. Optional: results are also
+   * returned in the order the operations were queued.
+   */
+  opId?: string;
+}
+
+/**
+ * Accumulates wired variable operations and sends them as one request.
  *
- * Instances are created by {@link VariablesResource.batch}; they are not meant
- * to be constructed directly.
+ * Instances come from {@link VariablesResource.batch}; there is no reason to
+ * construct one directly.
  */
 export class BatchBuilder {
   private readonly operations: BatchOperation[] = [];
@@ -39,88 +60,108 @@ export class BatchBuilder {
   constructor(private readonly executor: BatchExecutor) {}
 
   /**
-   * Queues a PATCH sub-request that updates a variable value.
+   * Queues a read of the variable for one entity.
    *
-   * @param opId - Caller-supplied identifier to correlate this operation with its result.
-   * @param path - Sub-request path, e.g. `/pets/119`.
-   * @param value - The new value to assign.
+   * @param path - Target path, e.g. `users/44`.
+   * @param options - Optional {@link BatchOperationOptions.opId}.
    * @returns This builder, for chaining.
    */
-  patch(opId: string, path: string, value: VariableValue): this {
-    this.operations.push({ op_id: opId, method: "PATCH", path, body: { value } });
-    return this;
+  get(path: string, options: BatchOperationOptions = {}): this {
+    return this.push({ method: "GET", path, ...withOpId(options) });
   }
 
   /**
-   * Queues a PUT sub-request that creates or replaces a variable value.
+   * Queues a create-or-replace of the variable for one entity.
    *
-   * @param opId - Caller-supplied identifier to correlate this operation with its result.
-   * @param path - Sub-request path.
-   * @param value - The value to assign.
+   * @param path - Target path, e.g. `users/44`.
+   * @param value - The whole number to store.
+   * @param options - Optional {@link BatchOperationOptions.opId}.
    * @returns This builder, for chaining.
+   * @throws {@link TypeError} when the value is not a whole number.
    */
-  put(opId: string, path: string, value: VariableValue): this {
-    this.operations.push({ op_id: opId, method: "PUT", path, body: { value } });
-    return this;
+  put(path: string, value: VariableValue, options: BatchOperationOptions = {}): this {
+    assertVariableValue(value);
+    return this.push({ method: "PUT", path, body: { value }, ...withOpId(options) });
   }
 
   /**
-   * Queues a DELETE sub-request that removes a variable value.
+   * Queues an update of the variable for one entity.
    *
-   * @param opId - Caller-supplied identifier to correlate this operation with its result.
-   * @param path - Sub-request path.
+   * @param path - Target path, e.g. `users/44`.
+   * @param value - The new whole number.
+   * @param options - Optional {@link BatchOperationOptions.opId}.
    * @returns This builder, for chaining.
+   * @throws {@link TypeError} when the value is not a whole number.
    */
-  delete(opId: string, path: string): this {
-    this.operations.push({ op_id: opId, method: "DELETE", path });
-    return this;
+  patch(path: string, value: VariableValue, options: BatchOperationOptions = {}): this {
+    assertVariableValue(value);
+    return this.push({ method: "PATCH", path, body: { value }, ...withOpId(options) });
   }
 
   /**
-   * Queues a GET sub-request that reads a variable value.
+   * Queues a deletion of the variable's stored value for one entity.
    *
-   * @param opId - Caller-supplied identifier to correlate this operation with its result.
-   * @param path - Sub-request path.
+   * @param path - Target path, e.g. `users/44`.
+   * @param options - Optional {@link BatchOperationOptions.opId}.
    * @returns This builder, for chaining.
    */
-  get(opId: string, path: string): this {
-    this.operations.push({ op_id: opId, method: "GET", path });
-    return this;
+  delete(path: string, options: BatchOperationOptions = {}): this {
+    return this.push({ method: "DELETE", path, ...withOpId(options) });
   }
 
   /**
-   * Appends a pre-built operation. Escape hatch for callers assembling
+   * Appends pre-built operations. An escape hatch for callers assembling
    * operations programmatically.
    *
    * @param operations - One or more operations to append.
    * @returns This builder, for chaining.
    */
   add(...operations: BatchOperation[]): this {
-    this.operations.push(...operations);
+    for (const operation of operations) {
+      this.push(operation);
+    }
     return this;
   }
 
-  /**
-   * The number of operations queued so far.
-   */
+  /** How many operations are queued so far. */
   get size(): number {
     return this.operations.length;
   }
 
   /**
    * Returns a copy of the queued operations without sending them. Useful for
-   * inspection, logging, or tests.
+   * logging, inspection, and tests.
    */
   toOperations(): BatchOperation[] {
     return [...this.operations];
   }
 
   /**
-   * Sends the accumulated operations as a single batch request.
+   * Sends every queued operation as a single request.
    *
-   * @returns The {@link BatchResult} reported by the server.
+   * @returns One result per operation, in the order they were queued.
+   * @throws {@link RangeError} when no operation has been queued.
+   * @throws {@link HabboAuthError} when the client lacks a `readKey` or a
+   *   `writeKey`, both of which a batch requires.
    */
-  execute(): Promise<BatchResult> {
+  execute(): Promise<BatchResults> {
+    if (this.operations.length === 0) {
+      throw new RangeError("A batch must contain at least one operation.");
+    }
     return this.executor(this.toOperations());
   }
+
+  private push(operation: BatchOperation): this {
+    if (this.operations.length >= BATCH_MAX_OPERATIONS) {
+      throw new RangeError(
+        `A batch accepts at most ${BATCH_MAX_OPERATIONS} operations. Split the work across several batches.`,
+      );
+    }
+    this.operations.push(operation);
+    return this;
+  }
+}
+
+function withOpId(options: BatchOperationOptions): { op_id?: string } {
+  return options.opId !== undefined ? { op_id: options.opId } : {};
 }

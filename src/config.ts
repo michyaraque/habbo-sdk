@@ -1,16 +1,8 @@
 /**
  * Client configuration and its resolution logic.
  *
- * The SDK speaks to two distinct contracts that have different hosts and
- * authentication models:
- *
- * 1. The **public Habbo API** (`profiles`), reachable per hotel domain
- *    (`https://www.habbo.<hotel>`), which requires no authentication.
- * 2. The **Wired Variables API** (`variables`), reachable at a separate base URL
- *    and authenticated with an `X-Wired-Write-Key` header.
- *
- * {@link resolveConfig} normalizes the two accepted constructor shapes into a
- * single internal {@link ResolvedConfig}.
+ * The public endpoints need no authentication, while the Wired Variables ones
+ * are authenticated per room with a read key and a write key.
  */
 
 import { type FetchLike, defaultFetch } from "./http.js";
@@ -19,7 +11,9 @@ import { type FetchLike, defaultFetch } from "./http.js";
  * Hotel domain suffixes supported by the public Habbo API.
  *
  * The value is appended to `www.habbo.` to form the API host. The special value
- * `sandbox` targets `sandbox.habbo.com`.
+ * Two values are not suffixes: `sandbox` targets `sandbox.habbo.com`, and
+ * `origins` targets `origins.habbo.com`, the separate Habbo Origins hotel that
+ * serves the `origins` resource.
  */
 export type Hotel =
   | "com"
@@ -31,20 +25,36 @@ export type Hotel =
   | "it"
   | "nl"
   | "com.tr"
-  | "sandbox";
+  | "sandbox"
+  | "origins";
 
 /**
  * Full configuration object accepted by the {@link HabboClient} constructor.
  */
 export interface HabboClientConfig {
   /**
-   * The `X-Wired-Write-Key` used to authenticate Wired Variables requests.
+   * The `X-Wired-Read-Key` used to authenticate Wired Variables **reads**.
    *
-   * Optional: omit it if you only intend to use the public `profiles` API. Any
-   * `variables` call made without a configured key will throw
-   * {@link HabboAuthError}.
+   * Optional: omit it if you only use the public `profiles` API or only perform
+   * writes. Any read that needs it throws {@link HabboAuthError} when it is
+   * missing. Both keys are found in the room's Wired settings in the hotel.
+   */
+  readKey?: string;
+
+  /**
+   * The `X-Wired-Write-Key` used to authenticate Wired Variables **writes**.
+   *
+   * Optional: omit it for a read-only client. Any write that needs it throws
+   * {@link HabboAuthError} when it is missing.
    */
   writeKey?: string;
+
+  /**
+   * The optional `api_key` sent with the Habbo Origins fishing derby endpoints.
+   *
+   * Only the derby routes accept it; every other endpoint ignores it.
+   */
+  originsApiKey?: string;
 
   /**
    * The hotel domain used by the public `profiles` API.
@@ -54,13 +64,13 @@ export interface HabboClientConfig {
   hotel?: Hotel;
 
   /**
-   * Overrides the base URL of the Wired Variables server, without a trailing
-   * slash, up to and including the API version segment.
+   * Overrides the host serving the Wired Variables API, without a trailing
+   * slash.
    *
-   * By default this is derived from {@link HabboClientConfig.hotel} as
-   * `https://www.habbo.<hotel>/server/v1`, since the Wired server is hosted on
-   * the same domain as the public API. Set this only to target a different host
-   * or version segment (for example a proxy or a test server).
+   * The Wired Variables endpoints live on the same host as the public API,
+   * under `/api/public/rooms/...`, so this defaults to the same value as
+   * {@link HabboClientConfig.publicBaseUrl}. Set it only to point the Wired
+   * calls at a different host, such as a proxy or a test server.
    */
   wiredBaseUrl?: string;
 
@@ -105,7 +115,9 @@ export interface HabboClientConfig {
  * the HTTP transport.
  */
 export interface ResolvedConfig {
+  readonly readKey: string | undefined;
   readonly writeKey: string | undefined;
+  readonly originsApiKey: string | undefined;
   readonly publicBaseUrl: string;
   readonly wiredBaseUrl: string;
   readonly fetch: FetchLike;
@@ -128,15 +140,15 @@ const DEFAULT_MAX_RETRIES = 2;
 declare const __SDK_VERSION__: string | undefined;
 const SDK_VERSION = typeof __SDK_VERSION__ === "string" ? __SDK_VERSION__ : "0.0.0-dev";
 
-/** The version segment appended to the host to form the Wired server base URL. */
-const WIRED_PATH = "/server/v1";
-
 /**
  * Computes the public API host for a given hotel domain.
  */
 function publicBaseUrlForHotel(hotel: Hotel): string {
   if (hotel === "sandbox") {
     return "https://sandbox.habbo.com";
+  }
+  if (hotel === "origins") {
+    return "https://origins.habbo.com";
   }
   return `https://www.habbo.${hotel}`;
 }
@@ -149,20 +161,24 @@ function stripTrailingSlash(url: string): string {
  * Normalizes the two accepted constructor argument shapes into a single
  * {@link ResolvedConfig}.
  *
- * @param input - Either a bare `X-Wired-Write-Key` string, or a full
- *   {@link HabboClientConfig} object.
+ * @param input - Either a full {@link HabboClientConfig} object, or a bare
+ *   string, which is treated as both the read and the write key. Rooms that
+ *   issue two distinct keys must use the object form.
  * @returns The resolved configuration with all defaults applied.
  */
 export function resolveConfig(input: string | HabboClientConfig): ResolvedConfig {
-  const config: HabboClientConfig = typeof input === "string" ? { writeKey: input } : input;
+  const config: HabboClientConfig =
+    typeof input === "string" ? { readKey: input, writeKey: input } : input;
 
   const hotel = config.hotel ?? DEFAULT_HOTEL;
   const host = publicBaseUrlForHotel(hotel);
   const publicBaseUrl = stripTrailingSlash(config.publicBaseUrl ?? host);
-  const wiredBaseUrl = stripTrailingSlash(config.wiredBaseUrl ?? `${host}${WIRED_PATH}`);
+  const wiredBaseUrl = stripTrailingSlash(config.wiredBaseUrl ?? publicBaseUrl);
 
   return {
+    readKey: config.readKey,
     writeKey: config.writeKey,
+    originsApiKey: config.originsApiKey,
     publicBaseUrl,
     wiredBaseUrl,
     fetch: config.fetch ?? defaultFetch(),

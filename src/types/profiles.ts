@@ -44,7 +44,10 @@ export interface Habbo {
   online?: boolean;
   /** Whether the user's profile (home) is publicly visible. */
   profileVisible?: boolean;
-  /** Badges the user has chosen to display. */
+  /**
+   * Badges the user has chosen to display, each carrying its `badgeIndex`
+   * position within the selection.
+   */
   selectedBadges?: Badge[];
   /** The user's current level, when reported. */
   currentLevel?: number;
@@ -78,6 +81,8 @@ export interface Group {
   secondaryColour?: string;
   /** Whether the requesting context is an administrator of the group. */
   isAdmin?: boolean;
+  /** Whether the group's room is currently online, when reported. */
+  online?: boolean;
 }
 
 /**
@@ -90,8 +95,8 @@ export interface Room {
   uniqueId: string;
   /** Room name. */
   name: string;
-  /** Room description. */
-  description: string;
+  /** Room description. `null` when the owner left it blank. */
+  description: string | null;
   /** Maximum number of simultaneous visitors. */
   maximumVisitors: number;
   /** Free-form tags assigned to the room. */
@@ -118,18 +123,46 @@ export interface Room {
 
 /**
  * The aggregated public profile returned by the `/profile` endpoint.
+ *
+ * The user sits under {@link Profile.user}, with their friends, groups, rooms,
+ * and badges alongside it.
  */
 export interface Profile {
   /** The profile owner. */
   user: Habbo;
-  /** The owner's public friends. */
+  /** The user's public friends. */
   friends: Habbo[];
-  /** The owner's groups. */
+  /** The groups the user belongs to. */
   groups: Group[];
-  /** The owner's public rooms. */
+  /** The user's public rooms. */
   rooms: Room[];
-  /** Badges the owner has earned. */
+  /** Badges the user has earned. */
   badges: Badge[];
+}
+
+/**
+ * A member of a group, as returned by the group members endpoint.
+ *
+ * This endpoint names the avatar field `habboFigure` rather than
+ * `figureString`, and adds `gender` and `isAdmin`.
+ */
+export interface GroupMember {
+  /** The member's unique identifier. */
+  uniqueId: string;
+  /** The member's display name. */
+  name: string;
+  /** The member's motto. */
+  motto: string;
+  /** The figure (avatar) string used to render the member. */
+  habboFigure: string;
+  /** The member's gender, e.g. `"M"` or `"F"`. */
+  gender?: string;
+  /** ISO 8601 timestamp of when the member joined the group. */
+  memberSince?: string;
+  /** Whether the member is currently online. */
+  online?: boolean;
+  /** Whether the member administrates the group. */
+  isAdmin?: boolean;
 }
 
 /**
@@ -164,23 +197,40 @@ export interface Photo {
 }
 
 /**
- * A single achievement entry, combining the achievement definition with the
- * user's progress towards it.
+ * The definition of an achievement.
+ */
+export interface AchievementDefinition {
+  /** Achievement identifier. */
+  id: number;
+  /** Achievement name. */
+  name: string;
+  /** Achievement category, e.g. `"identity"`. */
+  category: string;
+  /** Lifecycle state, e.g. `"ENABLED"`. */
+  state?: string;
+  /** Creation date, formatted `YYYY-MM-DD`. */
+  creationTime?: string;
+}
+
+/**
+ * The score needed to reach one level of an achievement.
+ */
+export interface AchievementLevelRequirement {
+  /** The level being described. */
+  level: number;
+  /** The score required to reach it. */
+  requiredScore: number;
+}
+
+/**
+ * An achievement together with its level thresholds, and, when read for a
+ * specific user, that user's progress.
  */
 export interface Achievement {
   /** The achievement definition. */
-  achievement: {
-    /** Achievement identifier. */
-    id: number | string;
-    /** Achievement name. */
-    name: string;
-    /** Achievement category. */
-    category: string;
-    /** Lifecycle state, when reported. */
-    state?: string;
-    /** ISO 8601 creation timestamp, when reported. */
-    creationTime?: string;
-  };
+  achievement: AchievementDefinition;
+  /** The score required at each level, when reported. */
+  levelRequirements?: AchievementLevelRequirement[];
   /** The level the user has reached, when reported. */
   level?: number;
   /** The score the user has accrued, when reported. */
@@ -188,41 +238,82 @@ export interface Achievement {
 }
 
 /**
- * An owner of a badge, returned by the badge owners endpoint.
- *
- * @remarks
- * UNVERIFIED: this shape is inferred and may change.
+ * Summary information about a badge and how many users hold it.
  */
-export interface BadgeOwner {
-  /** The owner's unique identifier. */
-  uniqueId: string;
-  /** The owner's display name. */
+export interface BadgeOwners {
+  /** How many users own the badge. */
+  ownerCount: number;
+  /** The badge name. */
   name: string;
+  /** The badge description. */
+  description: string;
 }
 
 /**
- * Identifies a single furni for a marketplace stats lookup.
+ * The furni to look up in a marketplace stats request.
+ *
+ * Provide floor items under `roomItems` and wall items under `wallItems`; each
+ * entry names one furni.
  */
 export interface MarketplaceStatsQuery {
-  /** Furni class/type identifier. */
-  furniType?: string;
-  /** Furni class id, when used instead of `furniType`. */
-  classId?: number;
+  /** Floor items to look up. */
+  roomItems?: Array<{ item: string }>;
+  /** Wall items to look up. */
+  wallItems?: Array<{ item: string }>;
 }
 
 /**
- * Marketplace statistics for a furni, returned by the batch stats endpoint.
+ * One historical data point of a furni's marketplace activity.
  *
- * @remarks
- * UNVERIFIED: this shape is inferred and may change.
+ * The API returns these fields as strings, including the numeric ones.
+ */
+export interface MarketplaceHistoryPoint {
+  /** Days before `statsDate` this point describes, e.g. `"-1"`. */
+  dayOffset: string;
+  /** Average price on that day. */
+  averagePrice: string;
+  /** How many items sold on that day. */
+  totalSoldItems: string;
+  /** Total credits exchanged on that day. */
+  totalCreditSum: string;
+  /** How many offers were open on that day. */
+  totalOpenOffers: string;
+}
+
+/**
+ * Marketplace statistics for a single furni.
+ */
+export interface MarketplaceItemStats {
+  /** The furni these stats describe. */
+  item: string;
+  /** The date the stats were computed, formatted `YYYY-MM-DD`. */
+  statsDate: string;
+  /** Day-by-day history leading up to `statsDate`. */
+  history: MarketplaceHistoryPoint[];
+  /** How many were sold over the reporting window. */
+  soldItemCount: number;
+  /** Total credits exchanged over the window. */
+  creditSum: number;
+  /** Average price over the window. */
+  averagePrice: number;
+  /** Total offers opened over the window. */
+  totalOpenOffers: number;
+  /** How many offers are open right now. */
+  currentOpenOffers: number;
+  /** The lowest price among the currently open offers. */
+  currentPrice: number;
+  /** How many days of history the API retains. */
+  historyLimitInDays: number;
+}
+
+/**
+ * The response of the batch marketplace stats endpoint.
  */
 export interface MarketplaceStats {
-  /** The furni the stats describe. */
-  furniType?: string;
-  /** Average price over the reporting window, when reported. */
-  averagePrice?: number;
-  /** Total number of items sold, when reported. */
-  totalSoldItems?: number;
-  /** Historical data points, when reported. */
-  history?: Array<{ dayOffset: number; averagePrice: number; soldItems: number }>;
+  /** Request status, e.g. `"OK"`. */
+  status: string;
+  /** Stats for the requested floor items. */
+  roomItemData: MarketplaceItemStats[];
+  /** Stats for the requested wall items. */
+  wallItemData: MarketplaceItemStats[];
 }

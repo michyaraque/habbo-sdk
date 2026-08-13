@@ -313,9 +313,11 @@ export class HttpClient {
   }
 
   /**
-   * Extracts a human-readable message from a Habbo error body. Both APIs use a
-   * couple of shapes: `{ "errors": [{ "msg": "..." }] }` and `{ "error": "..." }`,
-   * with `{ "message": "..." }` also seen on the Wired API.
+   * Extracts a human-readable message from a Habbo error body.
+   *
+   * The public API uses `{ "errors": [{ "msg": "..." }] }`, while the Wired
+   * Variables API returns a single error code as `{ "error": "..." }`, for
+   * example `wired.key_invalid`. `{ "message": "..." }` is also accepted.
    */
   private extractMessage(body: unknown, fallback: string): string | undefined {
     if (body !== null && typeof body === "object") {

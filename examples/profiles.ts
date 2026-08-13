@@ -15,8 +15,10 @@ console.log(`Motto:  ${user.motto}`);
 console.log(`Online: ${user.online ?? "unknown"}`);
 console.log(`Figure: ${user.figureString}`);
 
+// The profile nests the owner under `user`, alongside their friends, groups,
+// rooms, and badges.
 const profile = await habbo.profiles.getProfile(user.uniqueId);
-console.log("\nProfile summary:");
+console.log(`\nProfile summary for ${profile.user.name}:`);
 console.log(`  Friends: ${profile.friends.length}`);
 console.log(`  Groups:  ${profile.groups.length}`);
 console.log(`  Rooms:   ${profile.rooms.length}`);
