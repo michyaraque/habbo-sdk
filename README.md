@@ -21,7 +21,7 @@ Node.js 18 or newer, for the global `fetch`. On older runtimes, pass a `fetch` i
 ## Installation
 
 ```sh
-npm install habbo-sdk
+pnpm add habbo-sdk
 ```
 
 ## Usage
@@ -44,6 +44,7 @@ const habbo = new HabboClient({
   writeKey: process.env.WIRED_WRITE_KEY,
 });
 
+// 796 is the room id, 44 the in-room id of the user holding the value.
 const score = await habbo.variables.get(796, "user", "score", "users", 44);
 await habbo.variables.updateGlobal(796, "jackpot", 1500);
 ```
@@ -113,6 +114,18 @@ A wired variable is a counter attached to something in a room. Its scope says wh
 | global   | —                                                  | The room itself        |
 
 Scope and target kind are checked at compile time, so `("user", "wall-items")` does not compile.
+
+Every method takes the room as its first argument, written `796` in the examples below. It is the room's numeric id, the same one shown in the hotel, and it has to be the room the configured keys belong to.
+
+> [!IMPORTANT]
+> The numeric id is the only form these endpoints accept. A room's string identifier (`r-hhes-...`) returns `404`, which is easy to mistake for a missing room.
+
+If you already use the public API, that number is the `id` field of a `Room`, not its `uniqueId`:
+
+```ts
+const rooms = await habbo.profiles.getRooms("hhes-617d5a...");
+console.log(rooms[0]?.id); // 95182103, pass this as roomId
+```
 
 > [!IMPORTANT]
 > Wired variable values are whole numbers. Strings, booleans, and decimals are rejected with a `TypeError` before the request is sent.
