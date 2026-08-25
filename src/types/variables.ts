@@ -500,6 +500,11 @@ export interface WiredErrorBody {
 export const BATCH_MAX_OPERATIONS = 50;
 
 /**
+ * The threshold at which a furni identifier wraps back to its unsigned form.
+ */
+export const FURNI_ID_WRAP = 2147418112;
+
+/**
  * Throws when a value is not a safe integer, matching the API's own contract.
  *
  * Wired variables are whole numbers; the SDK rejects anything else up front so
@@ -514,4 +519,23 @@ export function assertVariableValue(value: number): void {
       `Wired variable values must be whole numbers within the safe integer range. Received: ${String(value)}`,
     );
   }
+}
+
+/**
+ * Normalizes a furni (floor or wall item) identifier for use in a Wired
+ * Variables URL.
+ *
+ * In-room item ids may be negative or above {@link FURNI_ID_WRAP}, and the API
+ * expects the wrapped, non-negative form. The SDK applies this automatically to
+ * every furni-scoped path; callers building their own batch paths can use it
+ * directly.
+ *
+ * @param furniId - The item identifier as reported by the room.
+ * @returns The sanitized, positive item identifier.
+ */
+export function sanitizeFurniId(furniId: string | number): number {
+  let id = typeof furniId === "number" ? furniId : Number.parseInt(furniId, 10);
+  if (id < 0) id = -id;
+  if (id >= FURNI_ID_WRAP) id -= FURNI_ID_WRAP;
+  return id;
 }

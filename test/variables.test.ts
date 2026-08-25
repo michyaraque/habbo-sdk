@@ -8,7 +8,13 @@
  */
 
 import assert from "node:assert/strict";
-import { HabboAuthError, HabboClient, isBatchOperationSuccess } from "../src/index.js";
+import {
+  FURNI_ID_WRAP,
+  HabboAuthError,
+  HabboClient,
+  isBatchOperationSuccess,
+  sanitizeFurniId,
+} from "../src/index.js";
 import type { FetchLike } from "../src/http.js";
 
 interface Call {
@@ -75,6 +81,47 @@ async function testWriteUsesWriteKey() {
   assert.equal(call.headers["X-Wired-Write-Key"], "w");
   assert.equal(call.headers["X-Wired-Read-Key"], undefined);
   assert.deepEqual(call.body, { value: 7 });
+}
+
+async function testSanitizeFurniId() {
+  assert.equal(sanitizeFurniId(5521), 5521);
+  assert.equal(sanitizeFurniId(-5521), 5521);
+  assert.equal(sanitizeFurniId(2147483647), 2147483647 - FURNI_ID_WRAP);
+  assert.equal(sanitizeFurniId(FURNI_ID_WRAP), 0);
+  assert.equal(sanitizeFurniId("-5521"), 5521);
+}
+
+async function testFurniIdIsSanitizedInProfileUrl() {
+  const habbo = client({ readKey: "r" });
+  await habbo.variables.profiles.getFurni(796, "furni", -5521);
+
+  const call = lastCall();
+  assert.equal(
+    call.url,
+    "https://sandbox.habbo.com/api/public/rooms/796/variables_profile/furni/furni/5521",
+  );
+}
+
+async function testFurniIdWrapsInScopedUrl() {
+  const habbo = client({ writeKey: "w" });
+  await habbo.variables.set(796, "furni", "uses", "furni", 2147483647, 7);
+
+  const call = lastCall();
+  assert.equal(
+    call.url,
+    "https://sandbox.habbo.com/api/public/rooms/796/variables/furni/uses/furni/65535",
+  );
+}
+
+async function testUserScopeDoesNotSanitizeEntityId() {
+  const habbo = client({ readKey: "r" });
+  await habbo.variables.get(796, "user", "coins", "users", -44);
+
+  const call = lastCall();
+  assert.equal(
+    call.url,
+    "https://sandbox.habbo.com/api/public/rooms/796/variables/user/coins/users/-44",
+  );
 }
 
 async function testBatchSendsBothKeysAndSpecShape() {
@@ -191,6 +238,10 @@ async function testBatchLimits() {
 const tests = [
   testReadUsesReadKeyAndCorrectPath,
   testWriteUsesWriteKey,
+  testSanitizeFurniId,
+  testFurniIdIsSanitizedInProfileUrl,
+  testFurniIdWrapsInScopedUrl,
+  testUserScopeDoesNotSanitizeEntityId,
   testBatchSendsBothKeysAndSpecShape,
   testListByKindMapsQueryParams,
   testIterateByKindStopsOnShortPage,

@@ -76,8 +76,10 @@ export type {
 
 export {
   BATCH_MAX_OPERATIONS,
+  FURNI_ID_WRAP,
   assertVariableValue,
   isBatchOperationSuccess,
+  sanitizeFurniId,
 } from "./types/variables.js";
 
 export type {

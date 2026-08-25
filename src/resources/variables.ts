@@ -12,6 +12,7 @@ import { HabboAuthError } from "../errors.js";
 import { BatchBuilder } from "./batch-builder.js";
 import {
   assertVariableValue,
+  sanitizeFurniId,
   type AnyFurniProfile,
   type AnyUserProfile,
   type BatchResults,
@@ -39,6 +40,22 @@ const WRITE_KEY_HEADER = "X-Wired-Write-Key";
 
 /** Identifies a room. Numeric ids are accepted as strings for convenience. */
 export type RoomId = number | string;
+
+/**
+ * Encodes an entity id for a path, sanitizing furni item ids first.
+ *
+ * @param scope - Whether the entity is a user-kind or a furni-kind entity.
+ * @param entityId - The entity's in-room identifier.
+ */
+function scopedEntityId(scope: VariableScope, entityId: string | number): string {
+  const id = scope === "furni" ? sanitizeFurniId(entityId) : entityId;
+  return encodeURIComponent(String(id));
+}
+
+/** Encodes a furni item id for a path, sanitizing it first. */
+function furniEntityId(entityId: string | number): string {
+  return encodeURIComponent(String(sanitizeFurniId(entityId)));
+}
 
 /**
  * Shared plumbing for the Wired Variables resources: URL building, per-operation
@@ -283,7 +300,7 @@ export class VariablesProfileResource extends WiredResource {
       "GET",
       "read",
       roomId,
-      `/variables_profile/furni/${targetKind}/${encodeURIComponent(String(entityId))}`,
+      `/variables_profile/furni/${targetKind}/${furniEntityId(entityId)}`,
     );
   }
 
@@ -320,7 +337,7 @@ export class VariablesProfileResource extends WiredResource {
       "PATCH",
       "write",
       roomId,
-      `/variables_profile/furni/${targetKind}/${encodeURIComponent(String(entityId))}`,
+      `/variables_profile/furni/${targetKind}/${furniEntityId(entityId)}`,
       { body },
     );
   }
@@ -449,7 +466,7 @@ export class VariablesResource extends WiredResource {
       "GET",
       "read",
       roomId,
-      `${this.scoped(scope, variableName)}/${targetKind}/${encodeURIComponent(String(entityId))}`,
+      `${this.scoped(scope, variableName)}/${targetKind}/${scopedEntityId(scope, entityId)}`,
     );
   }
 
@@ -488,7 +505,7 @@ export class VariablesResource extends WiredResource {
       "PUT",
       "write",
       roomId,
-      `${this.scoped(scope, variableName)}/${targetKind}/${encodeURIComponent(String(entityId))}`,
+      `${this.scoped(scope, variableName)}/${targetKind}/${scopedEntityId(scope, entityId)}`,
       { body },
     );
   }
@@ -525,7 +542,7 @@ export class VariablesResource extends WiredResource {
       "PATCH",
       "write",
       roomId,
-      `${this.scoped(scope, variableName)}/${targetKind}/${encodeURIComponent(String(entityId))}`,
+      `${this.scoped(scope, variableName)}/${targetKind}/${scopedEntityId(scope, entityId)}`,
       { body },
     );
   }
@@ -559,7 +576,7 @@ export class VariablesResource extends WiredResource {
       "DELETE",
       "write",
       roomId,
-      `${this.scoped(scope, variableName)}/${targetKind}/${encodeURIComponent(String(entityId))}`,
+      `${this.scoped(scope, variableName)}/${targetKind}/${scopedEntityId(scope, entityId)}`,
     );
   }
 
