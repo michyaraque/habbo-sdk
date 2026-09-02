@@ -12,8 +12,10 @@ import {
   FURNI_ID_WRAP,
   HabboAuthError,
   HabboClient,
+  fromApiFurniId,
   isBatchOperationSuccess,
   sanitizeFurniId,
+  toApiFurniId,
 } from "../src/index.js";
 import type { FetchLike } from "../src/http.js";
 
@@ -22,6 +24,7 @@ interface Call {
   method: string;
   headers: Record<string, string>;
   body: unknown;
+  rawBody: string;
 }
 
 const calls: Call[] = [];
@@ -33,6 +36,7 @@ const stubFetch: FetchLike = (url, init = {}) => {
     method: init.method ?? "GET",
     headers: init.headers ?? {},
     body: init.body !== undefined ? JSON.parse(init.body) : undefined,
+    rawBody: init.body ?? "",
   });
   return Promise.resolve({
     ok: true,
@@ -235,6 +239,97 @@ async function testBatchLimits() {
   assert.throws(() => builder.get("users/51"), RangeError, "the 51st operation must be rejected");
 }
 
+
+async function testBigintValuesSerializeExactly() {
+  const habbo = client({ writeKey: "w" });
+  await habbo.variables.updateGlobal(796, "jackpot", 2n ** 63n - 1n);
+  await habbo.variables.set(796, "user", "balance", "users", 44, -(2n ** 63n));
+
+  const call = lastCall();
+  assert.ok(call.rawBody.includes('"value":-9223372036854775808'), call.rawBody);
+  assert.ok(!call.rawBody.includes("__HABBO"), "no placeholder may leak onto the wire");
+}
+
+async function testSmallValuesSerializeAsPlainNumbers() {
+  const habbo = client({ writeKey: "w" });
+  await habbo.variables.updateGlobal(796, "jackpot", 1500);
+  assert.equal(lastCall().rawBody, '{"value":1500}');
+}
+
+async function testLargeResponseValuesParseAsBigint() {
+  const habbo = client({ readKey: "r" });
+  nextBody =
+    '{"value":9007199254740993,"creation_time":"2026-09-01T19:26:09.664Z","update_time":"2026-09-01T19:26:09.664Z"}';
+  const variable = await habbo.variables.getGlobal(796, "big");
+  assert.equal(variable.value, 9007199254740993n);
+  assert.equal(typeof variable.value, "bigint");
+
+  nextBody = '{"value":123,"creation_time":"t","update_time":"t"}';
+  const small = await habbo.variables.getGlobal(796, "small");
+  assert.equal(small.value, 123);
+  assert.equal(typeof small.value, "number");
+}
+
+async function testNestedBigintsAndDigitStringsSurviveParsing() {
+  const habbo = client({ readKey: "r" });
+  nextBody =
+    '{"user":{"id":44,"name":"Cebolla1"},"variables":{"coins":{"value":9223372036854775807,"creation_time":"t","update_time":"t"},"note":{"value":1,"creation_time":"t","update_time":"t"}}}';
+  const profile = await habbo.variables.profiles.getUser(796, "users", 44);
+  assert.equal(profile.variables["coins"]!.value, 9223372036854775807n);
+  assert.equal(profile.variables["note"]!.value, 1);
+
+  nextBody = '{"users":["9223372036854775807","ok"],"furni":[],"global":[]}';
+  const names = await habbo.variables.list(796);
+  assert.equal(names.users[0], "9223372036854775807");
+}
+
+async function testBigintValidation() {
+  const habbo = client({ writeKey: "w" });
+  await assert.rejects(
+    () => habbo.variables.updateGlobal(796, "j", 2n ** 63n),
+    TypeError,
+    "values past the int64 maximum must be rejected",
+  );
+  await assert.rejects(
+    () => habbo.variables.updateGlobal(796, "j", -(2n ** 63n) - 1n),
+    TypeError,
+    "values past the int64 minimum must be rejected",
+  );
+  assert.equal(calls.length, 0, "no request may reach the network");
+
+  await habbo.variables.updateGlobal(796, "j", 2n ** 63n - 1n);
+  assert.equal(calls.length, 1);
+}
+
+async function testFurniIdConversionBothWays() {
+  assert.deepEqual(toApiFurniId(5521), { kind: "furni", id: 5521 });
+  assert.deepEqual(toApiFurniId(-5521), { kind: "wall-items", id: 5521 });
+  assert.deepEqual(toApiFurniId(2147483647), { kind: "furni-bc", id: 65535 });
+  assert.deepEqual(toApiFurniId(-2147483647), { kind: "wall-items-bc", id: 65535 });
+  assert.equal(toApiFurniId(FURNI_ID_WRAP).kind, "furni-bc");
+  assert.equal(toApiFurniId(FURNI_ID_WRAP).id, 0);
+  assert.equal(toApiFurniId("-5521").kind, "wall-items");
+
+  assert.equal(fromApiFurniId({ kind: "furni", id: 5521 }), 5521);
+  assert.equal(fromApiFurniId({ kind: "wall-items", id: 5521 }), -5521);
+  assert.equal(fromApiFurniId({ kind: "furni-bc", id: 65535 }), 2147483647);
+  assert.equal(fromApiFurniId({ kind: "wall-items-bc", id: 65535 }), -2147483647);
+
+  for (const gameId of [0, 1, 5521, -5521, FURNI_ID_WRAP, 2147483647, -2147483647, -1]) {
+    assert.equal(fromApiFurniId(toApiFurniId(gameId)), gameId);
+  }
+}
+
+async function testBatchAllowsBigintValues() {
+  const habbo = client({ readKey: "r", writeKey: "w" });
+  await habbo.variables
+    .batch(796, "user", "score")
+    .patch("users/44", 2n ** 62n + 1n)
+    .execute();
+  const call = lastCall();
+  assert.ok(call.rawBody.includes('"value":4611686018427387905'), call.rawBody);
+}
+
 const tests = [
   testReadUsesReadKeyAndCorrectPath,
   testWriteUsesWriteKey,
@@ -249,7 +344,15 @@ const tests = [
   testMissingKeyFailsBeforeRequest,
   testNonIntegerValuesRejected,
   testBatchLimits,
+  testBigintValuesSerializeExactly,
+  testSmallValuesSerializeAsPlainNumbers,
+  testLargeResponseValuesParseAsBigint,
+  testNestedBigintsAndDigitStringsSurviveParsing,
+  testBigintValidation,
+  testFurniIdConversionBothWays,
+  testBatchAllowsBigintValues,
 ];
+
 
 for (const test of tests) {
   await test();

@@ -78,13 +78,16 @@ export {
   BATCH_MAX_OPERATIONS,
   FURNI_ID_WRAP,
   assertVariableValue,
+  fromApiFurniId,
   isBatchOperationSuccess,
   sanitizeFurniId,
+  toApiFurniId,
 } from "./types/variables.js";
 
 export type {
   AnyFurniProfile,
   AnyUserProfile,
+  ApiFurniId,
   BatchOperation,
   BatchOperationBody,
   BatchOperationError,

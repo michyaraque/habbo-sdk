@@ -3,3 +3,4 @@ dist
 docs/sdk
 *.log
 .DS_Store
+.pnpm-store/

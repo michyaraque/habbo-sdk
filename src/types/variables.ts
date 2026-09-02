@@ -38,18 +38,20 @@ export type TargetKindFor<S extends VariableScope> = S extends "user"
 /**
  * The value type a wired variable can hold.
  *
- * The API stores wired variables as whole numbers only; strings and booleans
- * are rejected. Values are validated by {@link assertVariableValue} before any
- * write leaves the SDK.
+ * The API stores wired variables as signed 64-bit whole numbers only; strings
+ * and booleans are rejected. Within the safe integer range the value is a
+ * plain `number`; beyond it the SDK uses `bigint`, which carries every
+ * value the API accepts. Values are validated by {@link assertVariableValue}
+ * before any write leaves the SDK.
  */
-export type VariableValue = number;
+export type VariableValue = number | bigint;
 
 /**
  * A stored wired variable value together with its timestamps.
  */
 export interface WiredVariable {
-  /** The current numeric value. */
-  value: number;
+  /** The current value: a `number` up to 2^53, a `bigint` beyond it. */
+  value: VariableValue;
   /** ISO 8601 timestamp of when the value was first stored. */
   creation_time: string;
   /** ISO 8601 timestamp of the most recent update. */
@@ -504,19 +506,32 @@ export const BATCH_MAX_OPERATIONS = 50;
  */
 export const FURNI_ID_WRAP = 2147418112;
 
+const INT64_MIN = -(2n ** 63n);
+const INT64_MAX = 2n ** 63n - 1n;
+
 /**
- * Throws when a value is not a safe integer, matching the API's own contract.
+ * Throws when a value cannot be stored as a wired variable.
  *
- * Wired variables are whole numbers; the SDK rejects anything else up front so
- * callers get a precise error instead of an opaque `400` from the server.
+ * Wired variables are signed 64-bit whole numbers; the SDK rejects anything
+ * else up front so callers get a precise error instead of an opaque `400`
+ * from the server.
  *
  * @param value - The value about to be written.
- * @throws {@link TypeError} when the value is not a safe integer.
+ * @throws {@link TypeError} when the value is not a whole number the API can
+ *   store.
  */
-export function assertVariableValue(value: number): void {
+export function assertVariableValue(value: VariableValue): void {
+  if (typeof value === "bigint") {
+    if (value < INT64_MIN || value > INT64_MAX) {
+      throw new TypeError(
+        `Wired variable values must fit in a signed 64-bit integer. Received: ${value.toString()}`,
+      );
+    }
+    return;
+  }
   if (!Number.isSafeInteger(value)) {
     throw new TypeError(
-      `Wired variable values must be whole numbers within the safe integer range. Received: ${String(value)}`,
+      `Wired variable values must be whole numbers; use bigint beyond 2^53. Received: ${String(value)}`,
     );
   }
 }
@@ -534,8 +549,33 @@ export function assertVariableValue(value: number): void {
  * @returns The sanitized, positive item identifier.
  */
 export function sanitizeFurniId(furniId: string | number): number {
+  return toApiFurniId(furniId).id;
+}
+
+export interface ApiFurniId {
+  /** The target kind under which the API addresses the item. */
+  kind: FurniTargetKind;
+  /** The sanitized, positive identifier used in API paths. */
+  id: number;
+}
+
+export function toApiFurniId(furniId: string | number): ApiFurniId {
   let id = typeof furniId === "number" ? furniId : Number.parseInt(furniId, 10);
-  if (id < 0) id = -id;
-  if (id >= FURNI_ID_WRAP) id -= FURNI_ID_WRAP;
-  return id;
+  const isWall = id < 0;
+  if (isWall) {
+    id = -id;
+  }
+  let kind: FurniTargetKind = isWall ? "wall-items" : "furni";
+  if (id >= FURNI_ID_WRAP) {
+    id -= FURNI_ID_WRAP;
+    kind = isWall ? "wall-items-bc" : "furni-bc";
+  }
+  return { kind, id };
+}
+
+export function fromApiFurniId(furniId: ApiFurniId): number {
+  const isBc = furniId.kind === "furni-bc" || furniId.kind === "wall-items-bc";
+  const isWall = furniId.kind === "wall-items" || furniId.kind === "wall-items-bc";
+  const base = isBc ? furniId.id + FURNI_ID_WRAP : furniId.id;
+  return isWall ? -base : base;
 }

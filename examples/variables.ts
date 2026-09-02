@@ -34,7 +34,7 @@ const jackpot = await habbo.variables.getGlobal(ROOM_ID, "jackpot").catch((error
 });
 
 const current = jackpot?.value ?? 0;
-const updated = await habbo.variables.updateGlobal(ROOM_ID, "jackpot", current + 100);
+const updated = await habbo.variables.updateGlobal(ROOM_ID, "jackpot", BigInt(current) + 100n);
 console.log(`\njackpot: ${current} -> ${updated.value}`);
 
 // A user-scoped variable: write it, then read it back.

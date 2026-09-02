@@ -47,6 +47,9 @@
     "api",
     "typescript"
   ],
+  "dependencies": {
+    "json-with-bigint": "^3.5.1"
+  },
   "devDependencies": {
     "@types/node": "^25.9.1",
     "tsup": "^8.3.5",

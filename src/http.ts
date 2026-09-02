@@ -15,6 +15,7 @@ import {
   MaintenanceError,
   UserInvalidError,
 } from "./errors.js";
+import { JSONParse, JSONStringify } from "json-with-bigint";
 
 /**
  * The subset of the `fetch` signature the SDK relies on. Any compatible
@@ -152,7 +153,7 @@ export class HttpClient {
 
     let serializedBody: string | undefined;
     if (options.body !== undefined) {
-      serializedBody = JSON.stringify(options.body);
+      serializedBody = JSONStringify(options.body);
       headers["Content-Type"] = "application/json";
     }
 
@@ -233,7 +234,7 @@ export class HttpClient {
       return undefined as T;
     }
     try {
-      return JSON.parse(text) as T;
+      return JSONParse(text) as T;
     } catch (error) {
       throw new HabboError("Failed to parse the API response as JSON.", {
         body: text,
@@ -306,7 +307,7 @@ export class HttpClient {
       return undefined;
     }
     try {
-      return JSON.parse(text);
+      return JSONParse(text);
     } catch {
       return undefined;
     }
