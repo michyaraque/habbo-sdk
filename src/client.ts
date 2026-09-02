@@ -1,47 +1,34 @@
 /**
- * The {@link HabboClient} entry point.
+ * The {@link HabboClient} entry point: the hotel's public API and the
+ * factory of its wired rooms.
  */
 
 import { type HabboClientConfig, resolveConfig } from "./config.js";
 import { HttpClient } from "./http.js";
+import { RoomInstance, type RoomInstanceConfig } from "./room-instance.js";
 import { OriginsResource } from "./resources/origins.js";
 import { ProfilesResource } from "./resources/profiles.js";
-import { VariablesResource } from "./resources/variables.js";
 
 /**
- * The main SDK client. It exposes two independent resource groups that map onto
- * two separate Habbo contracts:
+ * Reads the public, unauthenticated Habbo API and creates the room-bound
+ * Wired clients of its hotel.
  *
- * - {@link HabboClient.profiles} — the public, unauthenticated Habbo API for
- *   reading user, group, and room data.
- * - {@link HabboClient.variables} — the authenticated Wired Variables API for
- *   reading and writing room variables and variable profiles.
+ * The transport — hotel, fetch, timeouts — is configured once here and
+ * shared with every {@link RoomInstance} this client creates; the Wired
+ * keys never live on the client, only on the rooms.
  *
  * @example
  * ```ts
  * import { HabboClient } from "habbo-sdk";
  *
- * const habbo = new HabboClient({
- *   hotel: "es",
+ * const habbo = new HabboClient({ hotel: "es" });
+ * const user = await habbo.profiles.get("Cebolla1");
+ *
+ * const room = habbo.room({
+ *   roomId: 796,
  *   readKey: process.env.WIRED_READ_KEY,
  *   writeKey: process.env.WIRED_WRITE_KEY,
  * });
- *
- * const user = await habbo.profiles.get("Cebolla1");
- * const names = await habbo.variables.list(796);
- * await habbo.variables.updateGlobal(796, "jackpot", 1500);
- * ```
- *
- * @example
- * A read-only client needs no write key:
- * ```ts
- * const habbo = new HabboClient({ readKey: process.env.WIRED_READ_KEY });
- * ```
- *
- * @example
- * A bare string is used as both the read and the write key:
- * ```ts
- * const habbo = new HabboClient(process.env.WIRED_KEY!);
  * ```
  */
 export class HabboClient {
@@ -51,35 +38,58 @@ export class HabboClient {
   public readonly profiles: ProfilesResource;
 
   /**
-   * The Wired Variables API resource. Reads require a configured `readKey` and
-   * writes a `writeKey`; both are issued from the room's Wired settings.
-   */
-  public readonly variables: VariablesResource;
-
-  /**
-   * The Habbo Origins resource: minigame matches, the fishing derby, and skill
-   * leaderboards. Requires no authentication, though the derby endpoints accept
-   * an optional `originsApiKey`.
+   * The Habbo Origins resource: minigame matches, the fishing derby, and
+   * skill leaderboards. Requires no authentication, though the derby
+   * endpoints accept an optional `originsApiKey`.
    */
   public readonly origins: OriginsResource;
+
+  private readonly http: HttpClient;
+  private readonly resolved: ReturnType<typeof resolveConfig>;
 
   /**
    * Creates a new client.
    *
-   * @param config - Either a full {@link HabboClientConfig} object, or a bare
-   *   string used as both the read and the write key.
+   * @param config - The hotel and transport configuration.
    */
-  constructor(config: string | HabboClientConfig) {
-    const resolved = resolveConfig(config);
-    const http = new HttpClient({
-      fetch: resolved.fetch,
-      timeout: resolved.timeout,
-      maxRetries: resolved.maxRetries,
-      userAgent: resolved.userAgent,
+  constructor(config: HabboClientConfig) {
+    this.resolved = resolveConfig(config, config.originsApiKey);
+    this.http = new HttpClient({
+      fetch: this.resolved.fetch,
+      timeout: this.resolved.timeout,
+      maxRetries: this.resolved.maxRetries,
+      userAgent: this.resolved.userAgent,
     });
 
-    this.profiles = new ProfilesResource(http, resolved);
-    this.variables = new VariablesResource(http, resolved);
-    this.origins = new OriginsResource(http, resolved);
+    this.profiles = new ProfilesResource(this.http, this.resolved);
+    this.origins = new OriginsResource(this.http, this.resolved);
+  }
+
+  /**
+   * Binds the Wired Variables API of one room of this hotel.
+   *
+   * The room shares this client's transport; only the room id and its
+   * Wired keys are supplied here:
+   *
+   * ```ts
+   * const room = habbo.room({
+   *   roomId: 796,
+   *   readKey: process.env.WIRED_READ_KEY,
+   *   writeKey: process.env.WIRED_WRITE_KEY,
+   * });
+   *
+   * const coins = await room.variables.get("user", "coins", "users", 44);
+   * ```
+   *
+   * @param config - The room id and its keys.
+   * @returns A {@link RoomInstance} sharing this client's transport.
+   */
+  room(config: RoomInstanceConfig): RoomInstance {
+    return new RoomInstance(
+      config.roomId,
+      { readKey: config.readKey, writeKey: config.writeKey },
+      this.http,
+      this.resolved,
+    );
   }
 }

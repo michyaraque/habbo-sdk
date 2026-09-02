@@ -35,19 +35,32 @@ const user = await habbo.profiles.get("Cebolla1");
 console.log(user.uniqueId, user.motto);
 ```
 
-Wired Variables calls need the keys of the room you are targeting:
+The Wired Variables API is authenticated per room: its keys are issued from the room's
+Wired settings, so they are bound together on a `RoomInstance` and no call repeats
+the room id:
 
 ```ts
-const habbo = new HabboClient({
-  hotel: "es",
+import { HabboClient, RoomInstance } from "habbo-sdk";
+
+import { HabboClient } from "habbo-sdk";
+
+const habbo = new HabboClient({ hotel: "es" }); // hotel & transport: once
+
+const room = habbo.room({
+  roomId: 796,
   readKey: process.env.WIRED_READ_KEY,
   writeKey: process.env.WIRED_WRITE_KEY,
 });
 
-// 796 is the room id, 44 the in-room id of the user holding the value.
-const score = await habbo.variables.get(796, "user", "score", "users", 44);
-await habbo.variables.updateGlobal(796, "jackpot", 1500);
+// 44 is the in-room id of the user holding the value.
+const score = await room.variables.get("user", "score", "users", 44);
+await room.variables.updateGlobal("jackpot", 1500);
 ```
+
+A `RoomInstance` is a room bound to its Wired keys; it shares the
+`HabboClient`'s hotel and transport, so the hotel is configured exactly
+once. One instance per room — several rooms with different keys are several
+instances of the same client.
 
 Both ESM and CommonJS are supported:
 
@@ -57,7 +70,9 @@ const { HabboClient } = require("habbo-sdk");
 
 ## Authentication
 
-Only the Wired Variables API is authenticated. It uses two per-room keys, both issued from the room's Wired settings inside the hotel:
+Only the Wired Variables API is authenticated, with two keys issued from the
+room's Wired settings. They belong to the room, so they live on the
+`RoomInstance` that binds them to its `roomId`:
 
 | Option     | Header              | Used by                                                        |
 | ---------- | ------------------- | -------------------------------------------------------------- |
@@ -69,33 +84,35 @@ Batches send both, since one batch can mix reads and writes.
 Configure only what you need. A read-only integration never holds a write key:
 
 ```ts
-const habbo = new HabboClient({ readKey: process.env.WIRED_READ_KEY });
+const habbo = new HabboClient({ hotel: "es" });
+const room = habbo.room({ roomId: 796, readKey: process.env.WIRED_READ_KEY });
 ```
 
-When an operation needs a key that is not configured, the call rejects with `HabboAuthError` before any request is sent.
-
-Passing a bare string uses it as both keys:
-
-```ts
-const habbo = new HabboClient(process.env.WIRED_KEY);
-```
+When an operation needs a key the instance does not have, the call rejects with
+`HabboAuthError` before any request is sent.
 
 ## Configuration
 
+`HabboClient` (public API) and `RoomInstance` (one wired room) share the same
+transport options; `RoomInstance` adds the room id and its keys.
+
 ```ts
-const habbo = new HabboClient({
-  hotel: "es",
-  timeout: 15_000,
-  maxRetries: 2,
+const habbo = new HabboClient({ hotel: "es", timeout: 15_000, maxRetries: 2 });
+
+const room = habbo.room({
+  roomId: 796,
+  readKey: process.env.WIRED_READ_KEY,
+  writeKey: process.env.WIRED_WRITE_KEY,
 });
 ```
 
 | Option          | Type        | Default                 | Description                                                       |
 | --------------- | ----------- | ----------------------- | ----------------------------------------------------------------- |
 | `hotel`         | `Hotel`     | `"es"`                  | `com`, `es`, `com.br`, `de`, `fi`, `fr`, `it`, `nl`, `com.tr`, `sandbox`, `origins` |
+| `roomId`        | `number` \| `string` | required (`habbo.room`) | The room whose wired variables the instance manages        |
 | `readKey`       | `string`    | —                       | `X-Wired-Read-Key` for Wired reads                                |
 | `writeKey`      | `string`    | —                       | `X-Wired-Write-Key` for Wired writes                              |
-| `originsApiKey` | `string`    | —                       | Optional `api_key` for the fishing derby endpoints                |
+| `originsApiKey` | `string`    | —                       | Optional `api_key` for the fishing derby endpoints (HabboClient only) |
 | `publicBaseUrl` | `string`    | derived from `hotel`    | Overrides the API host                                            |
 | `wiredBaseUrl`  | `string`    | same as `publicBaseUrl` | Overrides the host serving the Wired endpoints                    |
 | `fetch`         | `FetchLike` | global `fetch`          | Custom fetch implementation                                       |
@@ -115,7 +132,9 @@ A wired variable is a counter attached to something in a room. Its scope says wh
 
 Scope and target kind are checked at compile time, so `("user", "wall-items")` does not compile.
 
-Every method takes the room as its first argument, written `796` in the examples below. It is the room's numeric id, the same one shown in the hotel, and it has to be the room the configured keys belong to.
+The examples below use the room bound on the `RoomInstance`, written as
+`room`. Its `roomId` is the numeric room id shown in the hotel, the same
+room the configured keys belong to.
 
 > [!IMPORTANT]
 > The numeric id is the only form these endpoints accept. A room's string identifier (`r-hhes-...`) returns `404`, which is easy to mistake for a missing room.
@@ -124,7 +143,7 @@ If you already use the public API, that number is the `id` field of a `Room`, no
 
 ```ts
 const rooms = await habbo.profiles.getRooms("hhes-617d5a...");
-console.log(rooms[0]?.id); // 95182103, pass this as roomId
+const room = habbo.room({ roomId: rooms[0]!.id, readKey, writeKey });
 ```
 
 > [!IMPORTANT]
@@ -135,19 +154,19 @@ console.log(rooms[0]?.id); // 95182103, pass this as roomId
 `list` returns the configured variable names, grouped by scope:
 
 ```ts
-const names = await habbo.variables.list(796);
+const names = await room.variables.list();
 // { users: ["coins", "score"], furni: ["uses_left"], global: ["jackpot"] }
 ```
 
 ### Reading and writing a single value
 
 ```ts
-const coins = await habbo.variables.get(796, "user", "coins", "users", 44);
+const coins = await room.variables.get("user", "coins", "users", 44);
 console.log(coins.value, coins.update_time);
 
-await habbo.variables.set(796, "user", "coins", "users", 44, 100);    // PUT
-await habbo.variables.update(796, "user", "coins", "users", 44, 120); // PATCH
-await habbo.variables.delete(796, "user", "coins", "users", 44);
+await room.variables.set("user", "coins", "users", 44, 100);    // PUT
+await room.variables.update("user", "coins", "users", 44, 120); // PATCH
+await room.variables.delete("user", "coins", "users", 44);
 ```
 
 Deleting removes that entity's stored value. The variable stays configured in the room.
@@ -155,8 +174,8 @@ Deleting removes that entity's stored value. The variable stays configured in th
 Room-wide globals have their own pair of methods:
 
 ```ts
-const jackpot = await habbo.variables.getGlobal(796, "jackpot");
-await habbo.variables.updateGlobal(796, "jackpot", jackpot.value + 100);
+const jackpot = await room.variables.getGlobal("jackpot");
+await room.variables.updateGlobal("jackpot", jackpot.value + 100);
 ```
 
 ### Leaderboards
@@ -164,7 +183,7 @@ await habbo.variables.updateGlobal(796, "jackpot", jackpot.value + 100);
 `listByKind` reads one variable across every entity of a kind, sorted and paginated:
 
 ```ts
-const top = await habbo.variables.listByKind(796, "user", "score", "users", {
+const top = await room.variables.listByKind("user", "score", "users", {
   orderBy: "value",   // "value" | "creation_time" | "update_time"
   orderDir: "desc",   // "asc" | "desc"
   page: 1,          // pages start at 1
@@ -179,7 +198,7 @@ for (const entry of top.items) {
 `count` returns how many entities hold a value:
 
 ```ts
-const players = await habbo.variables.count(796, "user", "score", "users");
+const players = await room.variables.count("user", "score", "users");
 ```
 
 ### Auto-pagination
@@ -187,7 +206,7 @@ const players = await habbo.variables.count(796, "user", "score", "users");
 `iterateByKind` walks every page for you:
 
 ```ts
-for await (const entry of habbo.variables.iterateByKind(796, "user", "score", "users", {
+for await (const entry of room.variables.iterateByKind("user", "score", "users", {
   orderBy: "value",
   orderDir: "desc",
 })) {
@@ -202,7 +221,7 @@ for await (const entry of habbo.variables.iterateByKind(796, "user", "score", "u
 A profile is every variable of one entity, fetched in a single request. Prefer it over several single reads:
 
 ```ts
-const profile = await habbo.variables.profiles.getUser(796, "users", 44);
+const profile = await room.variables.profiles.getUser("users", 44);
 
 console.log(profile.user.name);
 console.log(profile.variables.coins?.value);
@@ -214,13 +233,13 @@ The return type follows the target kind: `"pets"` yields `profile.pet`, `"bots"`
 When the in-room id is unknown, look the user up by name or unique id:
 
 ```ts
-const profile = await habbo.variables.profiles.findUser(796, { name: "Cebolla1" });
+const profile = await room.variables.profiles.findUser({ name: "Cebolla1" });
 ```
 
 Patching writes several variables at once. `null` deletes a stored value:
 
 ```ts
-await habbo.variables.profiles.patchUser(796, "users", 44, {
+await room.variables.profiles.patchUser("users", 44, {
   coins: 75,
   level: 3,
   temporary_flag: null,
@@ -230,11 +249,11 @@ await habbo.variables.profiles.patchUser(796, "users", 44, {
 Items and the room itself have the same pair of methods:
 
 ```ts
-await habbo.variables.profiles.getFurni(796, "wall-items", 5521);
-await habbo.variables.profiles.patchFurni(796, "furni", 5521, { uses_left: 2 });
+await room.variables.profiles.getFurni("wall-items", 5521);
+await room.variables.profiles.patchFurni("furni", 5521, { uses_left: 2 });
 
-const { variables } = await habbo.variables.profiles.getGlobal(796);
-await habbo.variables.profiles.patchGlobal(796, { jackpot: 1200, round: 4 });
+const { variables } = await room.variables.profiles.getGlobal(796);
+await room.variables.profiles.patchGlobal({ jackpot: 1200, round: 4 });
 ```
 
 Global variables cannot be deleted through a patch, so `patchGlobal` does not accept `null`. To clear an entity entirely, use `deleteUser`.
@@ -246,8 +265,8 @@ A batch acts on one variable across up to 50 entities and can mix reads and writ
 ```ts
 import { isBatchOperationSuccess } from "habbo-sdk";
 
-const { results } = await habbo.variables
-  .batch(796, "user", "score")
+const { results } = await room.variables
+  .batch("user", "score")
   .patch("users/44", 10)
   .patch("users/45", 7)
   .delete("users/46")
@@ -266,8 +285,8 @@ for (const result of results) {
 Results come back in the order the operations were queued. Pass an `opId` to correlate them with your own records instead:
 
 ```ts
-const { results } = await habbo.variables
-  .batch(796, "user", "score")
+const { results } = await room.variables
+  .batch("user", "score")
   .patch("users/44", 10, { opId: "winner" })
   .execute();
 
@@ -281,7 +300,7 @@ An operation can fail without failing the batch, which is why each result carrie
 `bulkDelete` clears every stored value of the named variables across the room, leaving the definitions in place:
 
 ```ts
-await habbo.variables.bulkDelete(796, ["score", "lives"]);
+await room.variables.bulkDelete(["score", "lives"]);
 ```
 
 ### Rate limits
@@ -318,29 +337,29 @@ reads, and cache leaderboards and counts for frequently accessed rooms.
 
 | Method                                               | Key   | Description                           |
 | ---------------------------------------------------- | ----- | ------------------------------------- |
-| `list(roomId)`                                       | read  | Variable names, grouped by scope      |
-| `get(roomId, scope, name, kind, entityId)`           | read  | Read one value                        |
-| `set(roomId, scope, name, kind, entityId, value)`    | write | Create or replace one value           |
-| `update(roomId, scope, name, kind, entityId, value)` | write | Update one value                      |
-| `delete(roomId, scope, name, kind, entityId)`        | write | Delete one stored value               |
-| `listByKind(roomId, scope, name, kind, options?)`    | read  | One page of values across a kind      |
-| `iterateByKind(roomId, scope, name, kind, options?)` | read  | Async iterator over every value       |
-| `count(roomId, scope, name, kind)`                   | read  | How many values are stored            |
-| `bulkDelete(roomId, names)`                          | write | Clear every value of these variables  |
-| `batch(roomId, scope, name)`                         | both  | Start a batch builder                 |
-| `getGlobal(roomId, name)`                            | read  | Read a global variable                |
-| `updateGlobal(roomId, name, value)`                  | write | Update a global variable              |
+| `list()`                                       | read  | Variable names, grouped by scope      |
+| `get(scope, name, kind, entityId)`           | read  | Read one value                        |
+| `set(scope, name, kind, entityId, value)`    | write | Create or replace one value           |
+| `update(scope, name, kind, entityId, value)` | write | Update one value                      |
+| `delete(scope, name, kind, entityId)`        | write | Delete one stored value               |
+| `listByKind(scope, name, kind, options?)`    | read  | One page of values across a kind      |
+| `iterateByKind(scope, name, kind, options?)` | read  | Async iterator over every value       |
+| `count(scope, name, kind)`                   | read  | How many values are stored            |
+| `bulkDelete(names)`                          | write | Clear every value of these variables  |
+| `batch(scope, name)`                         | both  | Start a batch builder                 |
+| `getGlobal(name)`                            | read  | Read a global variable                |
+| `updateGlobal(name, value)`                  | write | Update a global variable              |
 
 | `variables.profiles` method                     | Key   | Description                          |
 | ----------------------------------------------- | ----- | ------------------------------------ |
-| `findUser(roomId, { name } \| { uniqueId })`    | read  | Resolve a user profile by name or id |
-| `getUser(roomId, kind, entityId)`               | read  | All variables of a user, pet, or bot |
-| `patchUser(roomId, kind, entityId, variables)`  | write | Write several; `null` deletes        |
-| `deleteUser(roomId, kind, entityId)`            | write | Delete the whole profile             |
-| `getFurni(roomId, kind, entityId)`              | read  | All variables of an item             |
-| `patchFurni(roomId, kind, entityId, variables)` | write | Write several; `null` deletes        |
-| `getGlobal(roomId)`                             | read  | All global variables of the room     |
-| `patchGlobal(roomId, variables)`                | write | Write several globals                |
+| `findUser({ name } \| { uniqueId })`    | read  | Resolve a user profile by name or id |
+| `getUser(kind, entityId)`               | read  | All variables of a user, pet, or bot |
+| `patchUser(kind, entityId, variables)`  | write | Write several; `null` deletes        |
+| `deleteUser(kind, entityId)`            | write | Delete the whole profile             |
+| `getFurni(kind, entityId)`              | read  | All variables of an item             |
+| `patchFurni(kind, entityId, variables)` | write | Write several; `null` deletes        |
+| `getGlobal()`                             | read  | All global variables of the room     |
+| `patchGlobal(variables)`                | write | Write several globals                |
 
 ## Public API
 
@@ -436,7 +455,7 @@ are available:
 
 The add-on stacks on any variable — per user, per furni, or global — so read
 the value from whichever variable stores the XP. Per player it is usually a
-user-scoped variable:
+user-scoped variable on the player's `RoomInstance` (`room` below):
 
 ```ts
 import { LevelUpper } from "habbo-sdk";
@@ -444,7 +463,7 @@ import { LevelUpper } from "habbo-sdk";
 const levels = LevelUpper.linear(100n, 50n); // 100 XP per level, capped at level 50
 
 // XP earned by the player with in-room id 44.
-const { value: xp } = await habbo.variables.get(796, "user", "player_xp", "users", 44);
+const { value: xp } = await room.variables.get("user", "player_xp", "users", 44);
 
 console.log(
   levels.currentLevel(xp),       // the level as a bigint
@@ -496,7 +515,7 @@ The Wired Variables API returns a machine-readable code in the response body. Se
 import { HabboAuthError, type WiredErrorBody } from "habbo-sdk";
 
 try {
-  await habbo.variables.updateGlobal(796, "jackpot", 10);
+  await room.variables.updateGlobal("jackpot", 10);
 } catch (error) {
   if (error instanceof HabboAuthError) {
     const code = (error.body as WiredErrorBody | undefined)?.error;

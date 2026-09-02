@@ -12,6 +12,7 @@ import {
   FURNI_ID_WRAP,
   HabboAuthError,
   HabboClient,
+  RoomInstance,
   fromApiFurniId,
   isBatchOperationSuccess,
   sanitizeFurniId,
@@ -46,10 +47,13 @@ const stubFetch: FetchLike = (url, init = {}) => {
   });
 };
 
-function client(keys: { readKey?: string; writeKey?: string } = {}) {
+function room(keys: { readKey?: string; writeKey?: string } = {}) {
   calls.length = 0;
   nextBody = "{}";
-  return new HabboClient({ hotel: "sandbox", fetch: stubFetch, ...keys });
+  return new HabboClient({ hotel: "sandbox", fetch: stubFetch }).room({
+    roomId: 796,
+    ...keys,
+  });
 }
 
 function lastCall(): Call {
@@ -58,9 +62,26 @@ function lastCall(): Call {
   return call;
 }
 
+
+async function testRoomFactorySharesClientTransport() {
+  calls.length = 0;
+  nextBody = "{}";
+  const habbo = new HabboClient({ hotel: "sandbox", fetch: stubFetch });
+
+  const room = habbo.room({ roomId: 796, readKey: "r", writeKey: "w" });
+  await room.variables.list();
+
+  const call = lastCall();
+  assert.equal(call.url, "https://sandbox.habbo.com/api/public/rooms/796/variables");
+  assert.equal(call.headers["X-Wired-Read-Key"], "r");
+
+  const otherRoom = habbo.room({ roomId: 888, readKey: "r" });
+  await otherRoom.variables.getGlobal("jackpot");
+  assert.equal(lastCall().url, "https://sandbox.habbo.com/api/public/rooms/888/variables/global/jackpot");
+}
 async function testReadUsesReadKeyAndCorrectPath() {
-  const habbo = client({ readKey: "r", writeKey: "w" });
-  await habbo.variables.get(796, "user", "coins", "users", 44);
+  const habbo = room({ readKey: "r", writeKey: "w" });
+  await habbo.variables.get("user", "coins", "users", 44);
 
   const call = lastCall();
   assert.equal(
@@ -73,8 +94,8 @@ async function testReadUsesReadKeyAndCorrectPath() {
 }
 
 async function testWriteUsesWriteKey() {
-  const habbo = client({ readKey: "r", writeKey: "w" });
-  await habbo.variables.set(796, "furni", "uses", "wall-items", 5521, 7);
+  const habbo = room({ readKey: "r", writeKey: "w" });
+  await habbo.variables.set("furni", "uses", "wall-items", 5521, 7);
 
   const call = lastCall();
   assert.equal(
@@ -96,8 +117,8 @@ async function testSanitizeFurniId() {
 }
 
 async function testFurniIdIsSanitizedInProfileUrl() {
-  const habbo = client({ readKey: "r" });
-  await habbo.variables.profiles.getFurni(796, "furni", -5521);
+  const habbo = room({ readKey: "r" });
+  await habbo.variables.profiles.getFurni("furni", -5521);
 
   const call = lastCall();
   assert.equal(
@@ -107,8 +128,8 @@ async function testFurniIdIsSanitizedInProfileUrl() {
 }
 
 async function testFurniIdWrapsInScopedUrl() {
-  const habbo = client({ writeKey: "w" });
-  await habbo.variables.set(796, "furni", "uses", "furni", 2147483647, 7);
+  const habbo = room({ writeKey: "w" });
+  await habbo.variables.set("furni", "uses", "furni", 2147483647, 7);
 
   const call = lastCall();
   assert.equal(
@@ -118,8 +139,8 @@ async function testFurniIdWrapsInScopedUrl() {
 }
 
 async function testUserScopeDoesNotSanitizeEntityId() {
-  const habbo = client({ readKey: "r" });
-  await habbo.variables.get(796, "user", "coins", "users", -44);
+  const habbo = room({ readKey: "r" });
+  await habbo.variables.get("user", "coins", "users", -44);
 
   const call = lastCall();
   assert.equal(
@@ -129,7 +150,7 @@ async function testUserScopeDoesNotSanitizeEntityId() {
 }
 
 async function testBatchSendsBothKeysAndSpecShape() {
-  const habbo = client({ readKey: "r", writeKey: "w" });
+  const habbo = room({ readKey: "r", writeKey: "w" });
   nextBody = JSON.stringify({
     results: [
       { op_id: "a", status: 200, body: { value: 7, creation_time: "t", update_time: "t" } },
@@ -138,7 +159,7 @@ async function testBatchSendsBothKeysAndSpecShape() {
   });
 
   const { results } = await habbo.variables
-    .batch(796, "user", "score")
+    .batch("user", "score")
     .patch("users/44", 10, { opId: "a" })
     .delete("pets/12")
     .execute();
@@ -159,8 +180,8 @@ async function testBatchSendsBothKeysAndSpecShape() {
 }
 
 async function testListByKindMapsQueryParams() {
-  const habbo = client({ readKey: "r" });
-  await habbo.variables.listByKind(796, "user", "score", "users", {
+  const habbo = room({ readKey: "r" });
+  await habbo.variables.listByKind("user", "score", "users", {
     orderBy: "value",
     orderDir: "desc",
     size: 10,
@@ -174,7 +195,7 @@ async function testListByKindMapsQueryParams() {
 }
 
 async function testIterateByKindStopsOnShortPage() {
-  const habbo = client({ readKey: "r" });
+  const habbo = room({ readKey: "r" });
   let page = 0;
   const paged: FetchLike = (url, init) => {
     const items = page === 0 ? [{ value: 1 }, { value: 2 }] : [{ value: 3 }];
@@ -182,10 +203,10 @@ async function testIterateByKindStopsOnShortPage() {
     nextBody = JSON.stringify({ items, page, size: 2 });
     return stubFetch(url, init);
   };
-  const iterating = new HabboClient({ hotel: "sandbox", fetch: paged, readKey: "r" });
+  const iterating = new HabboClient({ hotel: "sandbox", fetch: paged }).room({ roomId: 796, readKey: "r" });
 
   const seen: unknown[] = [];
-  for await (const item of iterating.variables.iterateByKind(796, "user", "s", "users", {
+  for await (const item of iterating.variables.iterateByKind("user", "s", "users", {
     size: 2,
   })) {
     seen.push(item);
@@ -198,8 +219,8 @@ async function testIterateByKindStopsOnShortPage() {
 }
 
 async function testProfilePatchAllowsNullToDelete() {
-  const habbo = client({ writeKey: "w" });
-  await habbo.variables.profiles.patchUser(796, "users", 44, { coins: 50, tmp: null });
+  const habbo = room({ writeKey: "w" });
+  await habbo.variables.profiles.patchUser("users", 44, { coins: 50, tmp: null });
 
   const call = lastCall();
   assert.equal(
@@ -211,9 +232,9 @@ async function testProfilePatchAllowsNullToDelete() {
 }
 
 async function testMissingKeyFailsBeforeRequest() {
-  const habbo = client({ readKey: "r" });
+  const habbo = room({ readKey: "r" });
   await assert.rejects(
-    () => habbo.variables.updateGlobal(796, "jackpot", 1),
+    () => habbo.variables.updateGlobal("jackpot", 1),
     HabboAuthError,
     "a write without a write key must throw",
   );
@@ -221,18 +242,18 @@ async function testMissingKeyFailsBeforeRequest() {
 }
 
 async function testNonIntegerValuesRejected() {
-  const habbo = client({ writeKey: "w" });
-  await assert.rejects(() => habbo.variables.updateGlobal(796, "j", 1.5), TypeError);
+  const habbo = room({ writeKey: "w" });
+  await assert.rejects(() => habbo.variables.updateGlobal("j", 1.5), TypeError);
   assert.throws(
-    () => habbo.variables.batch(796, "user", "s").patch("users/1", Number.NaN),
+    () => habbo.variables.batch("user", "s").patch("users/1", Number.NaN),
     TypeError,
   );
   assert.equal(calls.length, 0);
 }
 
 async function testBatchLimits() {
-  const habbo = client({ readKey: "r", writeKey: "w" });
-  const builder = habbo.variables.batch(796, "user", "s");
+  const habbo = room({ readKey: "r", writeKey: "w" });
+  const builder = habbo.variables.batch("user", "s");
   assert.throws(() => builder.execute(), RangeError, "an empty batch must be rejected");
 
   for (let i = 0; i < 50; i += 1) {
@@ -243,9 +264,9 @@ async function testBatchLimits() {
 
 
 async function testBigintValuesSerializeExactly() {
-  const habbo = client({ writeKey: "w" });
-  await habbo.variables.updateGlobal(796, "jackpot", 2n ** 63n - 1n);
-  await habbo.variables.set(796, "user", "balance", "users", 44, -(2n ** 63n));
+  const habbo = room({ writeKey: "w" });
+  await habbo.variables.updateGlobal("jackpot", 2n ** 63n - 1n);
+  await habbo.variables.set("user", "balance", "users", 44, -(2n ** 63n));
 
   const call = lastCall();
   assert.ok(call.rawBody.includes('"value":-9223372036854775808'), call.rawBody);
@@ -253,53 +274,53 @@ async function testBigintValuesSerializeExactly() {
 }
 
 async function testSmallValuesSerializeAsPlainNumbers() {
-  const habbo = client({ writeKey: "w" });
-  await habbo.variables.updateGlobal(796, "jackpot", 1500);
+  const habbo = room({ writeKey: "w" });
+  await habbo.variables.updateGlobal("jackpot", 1500);
   assert.equal(lastCall().rawBody, '{"value":1500}');
 }
 
 async function testLargeResponseValuesParseAsBigint() {
-  const habbo = client({ readKey: "r" });
+  const habbo = room({ readKey: "r" });
   nextBody =
     '{"value":9007199254740993,"creation_time":"2026-09-01T19:26:09.664Z","update_time":"2026-09-01T19:26:09.664Z"}';
-  const variable = await habbo.variables.getGlobal(796, "big");
+  const variable = await habbo.variables.getGlobal("big");
   assert.equal(variable.value, 9007199254740993n);
   assert.equal(typeof variable.value, "bigint");
 
   nextBody = '{"value":123,"creation_time":"t","update_time":"t"}';
-  const small = await habbo.variables.getGlobal(796, "small");
+  const small = await habbo.variables.getGlobal("small");
   assert.equal(small.value, 123);
   assert.equal(typeof small.value, "number");
 }
 
 async function testNestedBigintsAndDigitStringsSurviveParsing() {
-  const habbo = client({ readKey: "r" });
+  const habbo = room({ readKey: "r" });
   nextBody =
     '{"user":{"id":44,"name":"Cebolla1"},"variables":{"coins":{"value":9223372036854775807,"creation_time":"t","update_time":"t"},"note":{"value":1,"creation_time":"t","update_time":"t"}}}';
-  const profile = await habbo.variables.profiles.getUser(796, "users", 44);
+  const profile = await habbo.variables.profiles.getUser("users", 44);
   assert.equal(profile.variables["coins"]!.value, 9223372036854775807n);
   assert.equal(profile.variables["note"]!.value, 1);
 
   nextBody = '{"users":["9223372036854775807","ok"],"furni":[],"global":[]}';
-  const names = await habbo.variables.list(796);
+  const names = await habbo.variables.list();
   assert.equal(names.users[0], "9223372036854775807");
 }
 
 async function testBigintValidation() {
-  const habbo = client({ writeKey: "w" });
+  const habbo = room({ writeKey: "w" });
   await assert.rejects(
-    () => habbo.variables.updateGlobal(796, "j", 2n ** 63n),
+    () => habbo.variables.updateGlobal("j", 2n ** 63n),
     TypeError,
     "values past the int64 maximum must be rejected",
   );
   await assert.rejects(
-    () => habbo.variables.updateGlobal(796, "j", -(2n ** 63n) - 1n),
+    () => habbo.variables.updateGlobal("j", -(2n ** 63n) - 1n),
     TypeError,
     "values past the int64 minimum must be rejected",
   );
   assert.equal(calls.length, 0, "no request may reach the network");
 
-  await habbo.variables.updateGlobal(796, "j", 2n ** 63n - 1n);
+  await habbo.variables.updateGlobal("j", 2n ** 63n - 1n);
   assert.equal(calls.length, 1);
 }
 
@@ -323,9 +344,9 @@ async function testFurniIdConversionBothWays() {
 }
 
 async function testBatchAllowsBigintValues() {
-  const habbo = client({ readKey: "r", writeKey: "w" });
+  const habbo = room({ readKey: "r", writeKey: "w" });
   await habbo.variables
-    .batch(796, "user", "score")
+    .batch("user", "score")
     .patch("users/44", 2n ** 62n + 1n)
     .execute();
   const call = lastCall();
@@ -333,16 +354,16 @@ async function testBatchAllowsBigintValues() {
 }
 
 async function testListByKindClampsPageSize() {
-  const habbo = client({ readKey: "r" });
-  await habbo.variables.listByKind(796, "user", "score", "users", { size: 500 });
+  const habbo = room({ readKey: "r" });
+  await habbo.variables.listByKind("user", "score", "users", { size: 500 });
   assert.ok(lastCall().url.includes("size=100"), lastCall().url);
 
-  await habbo.variables.listByKind(796, "user", "score", "users", { size: 0 });
+  await habbo.variables.listByKind("user", "score", "users", { size: 0 });
   assert.ok(!lastCall().url.includes("size="), "an invalid size must be omitted");
 }
 
 async function testIterateByKindUsesClampedSizeForTermination() {
-  const habbo = client({ readKey: "r" });
+  const habbo = room({ readKey: "r" });
   let page = 0;
   const paged: FetchLike = (url, init) => {
     const count = page === 0 ? 100 : 5;
@@ -351,10 +372,10 @@ async function testIterateByKindUsesClampedSizeForTermination() {
     nextBody = JSON.stringify({ items, page, size: 100 });
     return stubFetch(url, init);
   };
-  const iterating = new HabboClient({ hotel: "sandbox", fetch: paged, readKey: "r" });
+  const iterating = new HabboClient({ hotel: "sandbox", fetch: paged }).room({ roomId: 796, readKey: "r" });
 
   const seen: unknown[] = [];
-  for await (const item of iterating.variables.iterateByKind(796, "user", "s", "users", {
+  for await (const item of iterating.variables.iterateByKind("user", "s", "users", {
     size: 999,
   })) {
     seen.push(item);
@@ -367,19 +388,20 @@ async function testIterateByKindUsesClampedSizeForTermination() {
 }
 
 async function testListByKindNormalizesPageToAtLeastOne() {
-  const habbo = client({ readKey: "r" });
+  const habbo = room({ readKey: "r" });
 
-  await habbo.variables.listByKind(796, "user", "score", "users", { page: 0 });
+  await habbo.variables.listByKind("user", "score", "users", { page: 0 });
   assert.ok(lastCall().url.includes("page=1"), "page 0 must be sent as page 1");
 
-  await habbo.variables.listByKind(796, "user", "score", "users", { page: -3 });
+  await habbo.variables.listByKind("user", "score", "users", { page: -3 });
   assert.ok(lastCall().url.includes("page=1"), "a negative page must be sent as page 1");
 
-  await habbo.variables.listByKind(796, "user", "score", "users", { page: 2 });
+  await habbo.variables.listByKind("user", "score", "users", { page: 2 });
   assert.ok(lastCall().url.includes("page=2"), "pages above 1 pass through unchanged");
 }
 
 const tests = [
+  testRoomFactorySharesClientTransport,
   testReadUsesReadKeyAndCorrectPath,
   testWriteUsesWriteKey,
   testSanitizeFurniId,

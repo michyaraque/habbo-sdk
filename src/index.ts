@@ -1,19 +1,20 @@
 /**
  * habbo-sdk
  *
- * A TypeScript SDK that wraps two distinct Habbo contracts behind a single
- * client:
+ * A TypeScript SDK for Habbo, split by authentication boundary:
  *
- * - The public Habbo API (`profiles`) for reading user, group, and room data.
- * - The Wired Variables API (`variables`) for reading and writing room
- *   variables and variable profiles.
+ * - {@link HabboClient} — the public, unauthenticated API (`profiles`, `origins`).
+ * - {@link RoomInstance} — the Wired Variables API of one room, binding the
+ *   room id with its read/write keys.
  *
  * @packageDocumentation
  */
 
 export { HabboClient } from "./client.js";
+export { RoomInstance } from "./room-instance.js";
 
-export type { HabboClientConfig, Hotel } from "./config.js";
+export type { HabboClientConfig, Hotel, TransportConfig } from "./config.js";
+export type { RoomInstanceConfig } from "./room-instance.js";
 
 export {
   HabboError,
@@ -29,6 +30,9 @@ export type { FetchLike } from "./http.js";
 
 export type { ProfilesResource } from "./resources/profiles.js";
 export type { OriginsResource } from "./resources/origins.js";
+export type { RoomVariablesResource } from "./resources/room-variables.js";
+export type { RoomVariablesProfileResource } from "./resources/room-profile-variables.js";
+export type { RoomId } from "./resources/wired-resource.js";
 
 export { LevelUpper } from "./utils/level-up/level-upper.js";
 export type { LevelUpperConfig } from "./utils/level-up/level-upper-config.js";
@@ -51,11 +55,6 @@ export type {
   SkillLeaderboardEntry,
   SkillType,
 } from "./types/origins.js";
-export type {
-  RoomId,
-  VariablesResource,
-  VariablesProfileResource,
-} from "./resources/variables.js";
 export { BatchBuilder } from "./resources/batch-builder.js";
 export type { BatchExecutor, BatchOperationOptions } from "./resources/batch-builder.js";
 

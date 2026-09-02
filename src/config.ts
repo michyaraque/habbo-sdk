@@ -1,8 +1,9 @@
 /**
  * Client configuration and its resolution logic.
  *
- * The public endpoints need no authentication, while the Wired Variables ones
- * are authenticated per room with a read key and a write key.
+ * The public endpoints need no authentication. The Wired Variables API is
+ * authenticated per room, so its keys do not belong on this client: bind
+ * them on a {@link RoomInstance} instead.
  */
 
 import { type FetchLike, defaultFetch } from "./http.js";
@@ -29,35 +30,12 @@ export type Hotel =
   | "origins";
 
 /**
- * Full configuration object accepted by the {@link HabboClient} constructor.
+ * Transport options shared by every client kind: the target host, the
+ * `fetch` implementation, and the HTTP behaviour.
  */
-export interface HabboClientConfig {
+export interface TransportConfig {
   /**
-   * The `X-Wired-Read-Key` used to authenticate Wired Variables **reads**.
-   *
-   * Optional: omit it if you only use the public `profiles` API or only perform
-   * writes. Any read that needs it throws {@link HabboAuthError} when it is
-   * missing. Both keys are found in the room's Wired settings in the hotel.
-   */
-  readKey?: string;
-
-  /**
-   * The `X-Wired-Write-Key` used to authenticate Wired Variables **writes**.
-   *
-   * Optional: omit it for a read-only client. Any write that needs it throws
-   * {@link HabboAuthError} when it is missing.
-   */
-  writeKey?: string;
-
-  /**
-   * The optional `api_key` sent with the Habbo Origins fishing derby endpoints.
-   *
-   * Only the derby routes accept it; every other endpoint ignores it.
-   */
-  originsApiKey?: string;
-
-  /**
-   * The hotel domain used by the public `profiles` API.
+   * The hotel domain used by the API.
    *
    * @defaultValue `"es"`
    */
@@ -65,19 +43,15 @@ export interface HabboClientConfig {
 
   /**
    * Overrides the host serving the Wired Variables API, without a trailing
-   * slash.
-   *
-   * The Wired Variables endpoints live on the same host as the public API,
-   * under `/api/public/rooms/...`, so this defaults to the same value as
-   * {@link HabboClientConfig.publicBaseUrl}. Set it only to point the Wired
-   * calls at a different host, such as a proxy or a test server.
+   * slash. Defaults to the same value as
+   * {@link TransportConfig.publicBaseUrl}.
    */
   wiredBaseUrl?: string;
 
   /**
-   * Overrides the host used by the public `profiles` API. When set, it takes
-   * precedence over {@link HabboClientConfig.hotel}. Useful for testing or for
-   * pointing at a proxy. Provide it without a trailing slash.
+   * Overrides the host used by the public API. When set, it takes precedence
+   * over {@link TransportConfig.hotel}. Useful for testing or for pointing at
+   * a proxy. Provide it without a trailing slash.
    */
   publicBaseUrl?: string;
 
@@ -111,12 +85,22 @@ export interface HabboClientConfig {
 }
 
 /**
- * The fully normalized configuration consumed internally by the resources and
- * the HTTP transport.
+ * Full configuration object accepted by the {@link HabboClient} constructor.
+ */
+export interface HabboClientConfig extends TransportConfig {
+  /**
+   * The optional `api_key` sent with the Habbo Origins fishing derby
+   * endpoints. Only the derby routes accept it; every other endpoint ignores
+   * it.
+   */
+  originsApiKey?: string;
+}
+
+/**
+ * The fully normalized configuration consumed internally by the resources
+ * and the HTTP transport.
  */
 export interface ResolvedConfig {
-  readonly readKey: string | undefined;
-  readonly writeKey: string | undefined;
   readonly originsApiKey: string | undefined;
   readonly publicBaseUrl: string;
   readonly wiredBaseUrl: string;
@@ -140,9 +124,7 @@ const DEFAULT_MAX_RETRIES = 2;
 declare const __SDK_VERSION__: string | undefined;
 const SDK_VERSION = typeof __SDK_VERSION__ === "string" ? __SDK_VERSION__ : "0.0.0-dev";
 
-/**
- * Computes the public API host for a given hotel domain.
- */
+/** Computes the public API host for a given hotel domain. */
 function publicBaseUrlForHotel(hotel: Hotel): string {
   if (hotel === "sandbox") {
     return "https://sandbox.habbo.com";
@@ -158,27 +140,20 @@ function stripTrailingSlash(url: string): string {
 }
 
 /**
- * Normalizes the two accepted constructor argument shapes into a single
- * {@link ResolvedConfig}.
+ * Normalizes a transport configuration with defaults applied.
  *
- * @param input - Either a full {@link HabboClientConfig} object, or a bare
- *   string, which is treated as both the read and the write key. Rooms that
- *   issue two distinct keys must use the object form.
- * @returns The resolved configuration with all defaults applied.
+ * @param config - The transport options to resolve.
+ * @param originsApiKey - The optional Origins derby key; only the public
+ *   client passes one.
  */
-export function resolveConfig(input: string | HabboClientConfig): ResolvedConfig {
-  const config: HabboClientConfig =
-    typeof input === "string" ? { readKey: input, writeKey: input } : input;
-
+export function resolveConfig(config: TransportConfig, originsApiKey?: string): ResolvedConfig {
   const hotel = config.hotel ?? DEFAULT_HOTEL;
   const host = publicBaseUrlForHotel(hotel);
   const publicBaseUrl = stripTrailingSlash(config.publicBaseUrl ?? host);
   const wiredBaseUrl = stripTrailingSlash(config.wiredBaseUrl ?? publicBaseUrl);
 
   return {
-    readKey: config.readKey,
-    writeKey: config.writeKey,
-    originsApiKey: config.originsApiKey,
+    originsApiKey,
     publicBaseUrl,
     wiredBaseUrl,
     fetch: config.fetch ?? defaultFetch(),
