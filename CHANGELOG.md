@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/michyaraque/habbo-sdk/compare/v0.4.0...v0.5.0) (2026-09-02)
+
+
+### Features
+
+* add Wired Variables resources and room instance management ([3e9a5ae](https://github.com/michyaraque/habbo-sdk/commit/3e9a5ae350126af63cb1747e3c31a8469c0fc0c2))
+
 ## [0.4.0](https://github.com/michyaraque/habbo-sdk/compare/v0.3.0...v0.4.0) (2026-09-02)
 
 
