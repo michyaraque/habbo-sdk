@@ -16,7 +16,7 @@ The client exposes three resources:
 
 ## Requirements
 
-Node.js 18 or newer, for the global `fetch`. On older runtimes, pass a `fetch` implementation through the `fetch` option.
+Node.js 22 or newer, for the global `fetch`. On older runtimes, pass a `fetch` implementation through the `fetch` option.
 
 ## Installation
 
