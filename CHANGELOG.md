@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/michyaraque/habbo-sdk/compare/v0.5.0...v0.5.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* standardize output formatting in console logs and improve documentation clarity ([6a46f1d](https://github.com/michyaraque/habbo-sdk/commit/6a46f1dcf360d8bf1947e5af5f919b590e7e8ee4))
+* update Node.js version requirement to 22 or newer in README ([5a85049](https://github.com/michyaraque/habbo-sdk/commit/5a85049ea7449e0fda415fc53f468c666a4eee51))
+
 ## [0.5.0](https://github.com/michyaraque/habbo-sdk/compare/v0.4.0...v0.5.0) (2026-09-02)
 
 
