@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0](https://github.com/michyaraque/habbo-sdk/compare/v0.3.0...v0.4.0) (2026-09-02)
+
+
+### Features
+
+* add rate limit documentation and enforce page size constraints in variables API ([2d0e39a](https://github.com/michyaraque/habbo-sdk/commit/2d0e39acd4408dc65af68cac93ab3c1ec7139221))
+* implement level-up system with various strategies and add tests ([46cbe4e](https://github.com/michyaraque/habbo-sdk/commit/46cbe4e08eb675a7200193327337d69d9a072dca))
+* normalize pagination to one-based index and update related tests ([4aefb6f](https://github.com/michyaraque/habbo-sdk/commit/4aefb6f1481fb3d6e90d9de85847e458ac905aaa))
+* support bigint values in wired variables and enhance furni ID handling ([a78fb59](https://github.com/michyaraque/habbo-sdk/commit/a78fb5904c869c31e983d8afc63580b4e76612e4))
+
 ## [0.3.0](https://github.com/michyaraque/habbo-sdk/compare/v0.2.0...v0.3.0) (2026-08-25)
 
 
