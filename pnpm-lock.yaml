@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       json-with-bigint:
-        specifier: ^3.5.1
+        specifier: ^3.5.12
         version: 3.5.12
     devDependencies:
       '@types/node':

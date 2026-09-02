@@ -167,7 +167,7 @@ await habbo.variables.updateGlobal(796, "jackpot", jackpot.value + 100);
 const top = await habbo.variables.listByKind(796, "user", "score", "users", {
   orderBy: "value",   // "value" | "creation_time" | "update_time"
   orderDir: "desc",   // "asc" | "desc"
-  page: 0,
+  page: 1,          // pages start at 1
   size: 10,
 });
 
@@ -419,6 +419,44 @@ if (derby) {
 | `iterateSkillLeaderboard(skillType?)`     | Async iterator over the whole leaderboard  |
 
 The derby endpoints accept an optional API key, configured once as `originsApiKey`.
+
+## Utilities
+
+`LevelUpper` turns an XP amount into a level and its progress, mirroring the
+math of the room's level-up add-on. It works with `bigint` throughout, so it
+is safe to feed it values read straight from wired variables. Three profiles
+are available:
+
+| Factory | Shape |
+| --- | --- |
+| `LevelUpper.linear(stepSize, maxLevel)` | Every level costs the same XP |
+| `LevelUpper.interpolate({ level: xp })` | Give the XP at which some known levels start; the rest are spread evenly between them |
+| `LevelUpper.exponential(initialXp, strength, maxLevel)` | Each level costs more than the last; `strength` is a percentage |
+| `LevelUpper.steps([100n, 150n, 250n])` | Define the exact XP each level transition requires, one entry per jump |
+
+The add-on stacks on any variable — per user, per furni, or global — so read
+the value from whichever variable stores the XP. Per player it is usually a
+user-scoped variable:
+
+```ts
+import { LevelUpper } from "habbo-sdk";
+
+const levels = LevelUpper.linear(100n, 50n); // 100 XP per level, capped at level 50
+
+// XP earned by the player with in-room id 44.
+const { value: xp } = await habbo.variables.get(796, "user", "player_xp", "users", 44);
+
+console.log(
+  levels.currentLevel(xp),       // the level as a bigint
+  levels.progressPercentage(xp), // 0..100
+  levels.xpRemaining(xp),        // XP left until the next level
+  levels.isMaxed(xp),
+);
+```
+
+Every instance implements `LevelUpperConfig`: `currentLevel`, `totalXpRequired`,
+`progress`, `progressPercentage`, `xpRemaining`, `isMaxed`, `maxLevel`, `maxXp`,
+and `boundedValue` (which clamps negative or over-max XP before any calculation).
 
 ## Handling errors
 

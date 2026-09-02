@@ -30,6 +30,9 @@ export type { FetchLike } from "./http.js";
 export type { ProfilesResource } from "./resources/profiles.js";
 export type { OriginsResource } from "./resources/origins.js";
 
+export { LevelUpper } from "./utils/level-up/level-upper.js";
+export type { LevelUpperConfig } from "./utils/level-up/level-upper-config.js";
+
 export type {
   Derby,
   DerbyInfo,
