@@ -3,8 +3,8 @@
  *
  * A TypeScript SDK for Habbo, split by authentication boundary:
  *
- * - {@link HabboClient} — the public, unauthenticated API (`profiles`, `origins`).
- * - {@link RoomInstance} — the Wired Variables API of one room, binding the
+ * - {@link HabboClient}: the public, unauthenticated API (`profiles`, `origins`).
+ * - {@link RoomInstance}: the Wired Variables API of one room, binding the
  *   room id with its read/write keys.
  *
  * @packageDocumentation

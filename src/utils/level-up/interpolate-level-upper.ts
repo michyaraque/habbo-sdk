@@ -1,8 +1,8 @@
 /**
  * The interpolating level-up strategy.
  *
- * Configure the XP at which some known levels start — for example level `1`
- * at `0n` and level `10` at `1000n` — and every level in between is spread
+ * Configure the XP at which some known levels start, for example level `1`
+ * at `0n` and level `10` at `1000n`, and every level in between is spread
  * evenly over the XP gap, mirroring how the add-on behaves for levels it has
  * no exact point for.
  *

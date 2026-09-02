@@ -2,7 +2,7 @@
  * The authenticated entry point to the Wired Variables API of one room.
  *
  * Rooms are created through {@link HabboClient.room}, which binds the room
- * to the client's transport — the hotel, fetch, and timeouts live on the
+ * to the client's transport: the hotel, fetch, and timeouts live on the
  * client exactly once, and the keys are the only thing the room adds:
  *
  * ```ts

@@ -428,7 +428,7 @@ export interface BulkDeleteInput {
  *
  * Read it off `error.body` to tell apart failures that share an HTTP status.
  * A `403`, for instance, means a bad key, a room with the API switched off, or
- * an operation the room does not permit — three very different fixes.
+ * an operation the room does not permit: three very different fixes.
  *
  * Unknown strings are allowed so a newly added code does not break typing.
  *

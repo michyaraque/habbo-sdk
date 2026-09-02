@@ -3,8 +3,8 @@
  * defined explicitly, one value per jump.
  *
  * Unlike the interpolating strategy, nothing is invented: a level only
- * starts where the configured steps say it does, so arbitrary curves —
- * expensive early levels, a cheap middle stretch, a brutal final one — are
+ * starts where the configured steps say it does, so arbitrary curves,
+ * expensive early levels, a cheap middle stretch, or a brutal final one, are
  * expressed directly. Level `1` starts at `0n` and each configured step
  * unlocks the next level.
  */

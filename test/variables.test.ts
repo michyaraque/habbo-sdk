@@ -1,7 +1,7 @@
 /**
  * Contract checks for the Wired Variables resource, run against a stub `fetch`.
  *
- * They assert what the SDK puts on the wire — URL, method, headers, body — and
+ * They assert what the SDK puts on the wire (URL, method, headers, body) and
  * the guards that reject invalid input before a request is made.
  *
  * Run with `pnpm test`.

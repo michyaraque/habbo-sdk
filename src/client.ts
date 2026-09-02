@@ -13,7 +13,7 @@ import { ProfilesResource } from "./resources/profiles.js";
  * Reads the public, unauthenticated Habbo API and creates the room-bound
  * Wired clients of its hotel.
  *
- * The transport — hotel, fetch, timeouts — is configured once here and
+ * The transport (hotel, fetch, timeouts) is configured once here and
  * shared with every {@link RoomInstance} this client creates; the Wired
  * keys never live on the client, only on the rooms.
  *

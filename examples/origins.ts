@@ -37,7 +37,7 @@ if (latest !== undefined) {
   console.log(`  mode ${match.info.gameMode}, ${match.info.gameDuration / 1000}s`);
 
   for (const player of match.info.participants) {
-    console.log(`    #${player.playerPlacement} ${player.gamePlayerId} — ${player.gameScore}`);
+    console.log(`    #${player.playerPlacement} ${player.gamePlayerId} - ${player.gameScore}`);
   }
 }
 
@@ -57,7 +57,7 @@ console.log(`\nfishing: level ${skill.level}, ${skill.experience} xp`);
 const board = await habbo.origins.getSkillLeaderboard("FISHING", 1);
 console.log(`leaderboard page 1 of ${board.totalPages}`);
 for (const [index, entry] of board.entries.slice(0, 5).entries()) {
-  console.log(`  ${index + 1}. ${entry.uniqueId} — level ${entry.level}`);
+  console.log(`  ${index + 1}. ${entry.uniqueId} - level ${entry.level}`);
 }
 
 // The fishing derby. These endpoints accept the optional originsApiKey.

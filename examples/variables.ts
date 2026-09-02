@@ -50,7 +50,7 @@ const top = await room.variables.listByKind("user", "score", "users", {
 });
 console.log("\nTop scores");
 for (const [index, entry] of top.items.entries()) {
-  console.log(`  ${index + 1}. ${entry.name ?? entry.id} — ${entry.value}`);
+  console.log(`  ${index + 1}. ${entry.name ?? entry.id} - ${entry.value}`);
 }
 
 // Every variable of one user in a single request, rather than one call each.

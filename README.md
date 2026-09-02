@@ -59,7 +59,7 @@ await room.variables.updateGlobal("jackpot", 1500);
 
 A `RoomInstance` is a room bound to its Wired keys; it shares the
 `HabboClient`'s hotel and transport, so the hotel is configured exactly
-once. One instance per room — several rooms with different keys are several
+once. One instance per room: several rooms with different keys are several
 instances of the same client.
 
 Both ESM and CommonJS are supported:
@@ -110,9 +110,9 @@ const room = habbo.room({
 | --------------- | ----------- | ----------------------- | ----------------------------------------------------------------- |
 | `hotel`         | `Hotel`     | `"es"`                  | `com`, `es`, `com.br`, `de`, `fi`, `fr`, `it`, `nl`, `com.tr`, `sandbox`, `origins` |
 | `roomId`        | `number` \| `string` | required (`habbo.room`) | The room whose wired variables the instance manages        |
-| `readKey`       | `string`    | —                       | `X-Wired-Read-Key` for Wired reads                                |
-| `writeKey`      | `string`    | —                       | `X-Wired-Write-Key` for Wired writes                              |
-| `originsApiKey` | `string`    | —                       | Optional `api_key` for the fishing derby endpoints (HabboClient only) |
+| `readKey`       | `string`    | -                       | `X-Wired-Read-Key` for Wired reads                                |
+| `writeKey`      | `string`    | -                       | `X-Wired-Write-Key` for Wired writes                              |
+| `originsApiKey` | `string`    | -                       | Optional `api_key` for the fishing derby endpoints (HabboClient only) |
 | `publicBaseUrl` | `string`    | derived from `hotel`    | Overrides the API host                                            |
 | `wiredBaseUrl`  | `string`    | same as `publicBaseUrl` | Overrides the host serving the Wired endpoints                    |
 | `fetch`         | `FetchLike` | global `fetch`          | Custom fetch implementation                                       |
@@ -128,7 +128,7 @@ A wired variable is a counter attached to something in a room. Its scope says wh
 | -------- | -------------------------------------------------- | ---------------------- |
 | `user`   | `users`, `pets`, `bots`                            | A person, pet, or bot  |
 | `furni`  | `furni`, `furni-bc`, `wall-items`, `wall-items-bc` | An item in the room    |
-| global   | —                                                  | The room itself        |
+| global   | -                                                  | The room itself        |
 
 Scope and target kind are checked at compile time, so `("user", "wall-items")` does not compile.
 
@@ -310,12 +310,12 @@ window and a 60-second sustained window:
 
 | Call class                                              | Per minute | Burst (10 s) |
 | ------------------------------------------------------- | ---------- | ------------ |
-| Simple reads — `get`, `getGlobal`                     | 300        | 60           |
-| List endpoints — `list`, `listByKind`, `count`         | 120        | 20           |
-| Profile reads — `profiles.findUser`, `profiles.get*`    | 120        | 20           |
-| Writes — `set`, `update`, `delete`, `profiles.patch*`, `profiles.deleteUser` | 120 | 30 |
-| Bulk deletes — `bulkDelete`                            | 10         | 5            |
-| Batch requests — `batch(...).execute()`                | 30         | —            |
+| Simple reads: `get`, `getGlobal`                     | 300        | 60           |
+| List endpoints: `list`, `listByKind`, `count`         | 120        | 20           |
+| Profile reads: `profiles.findUser`, `profiles.get*`    | 120        | 20           |
+| Writes: `set`, `update`, `delete`, `profiles.patch*`, `profiles.deleteUser` | 120 | 30 |
+| Bulk deletes: `bulkDelete`                            | 10         | 5            |
+| Batch requests: `batch(...).execute()`                | 30         | -            |
 
 A batch holds at most 50 operations, and batched writes draw from an
 additional budget of 500 write operations per minute. The SDK clamps every
@@ -453,7 +453,7 @@ are available:
 | `LevelUpper.exponential(initialXp, strength, maxLevel)` | Each level costs more than the last; `strength` is a percentage |
 | `LevelUpper.steps([100n, 150n, 250n])` | Define the exact XP each level transition requires, one entry per jump |
 
-The add-on stacks on any variable — per user, per furni, or global — so read
+The add-on stacks on any variable (per user, per furni, or global), so read
 the value from whichever variable stores the XP. Per player it is usually a
 user-scoped variable on the player's `RoomInstance` (`room` below):
 
