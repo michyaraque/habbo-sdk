@@ -330,6 +330,39 @@ async function testBatchAllowsBigintValues() {
   assert.ok(call.rawBody.includes('"value":4611686018427387905'), call.rawBody);
 }
 
+async function testListByKindClampsPageSize() {
+  const habbo = client({ readKey: "r" });
+  await habbo.variables.listByKind(796, "user", "score", "users", { size: 500 });
+  assert.ok(lastCall().url.includes("size=100"), lastCall().url);
+
+  await habbo.variables.listByKind(796, "user", "score", "users", { size: 0 });
+  assert.ok(!lastCall().url.includes("size="), "an invalid size must be omitted");
+}
+
+async function testIterateByKindUsesClampedSizeForTermination() {
+  const habbo = client({ readKey: "r" });
+  let page = 0;
+  const paged: FetchLike = (url, init) => {
+    const count = page === 0 ? 100 : 5;
+    const items = Array.from({ length: count }, (_, index) => ({ value: page * 100 + index }));
+    page += 1;
+    nextBody = JSON.stringify({ items, page, size: 100 });
+    return stubFetch(url, init);
+  };
+  const iterating = new HabboClient({ hotel: "sandbox", fetch: paged, readKey: "r" });
+
+  const seen: unknown[] = [];
+  for await (const item of iterating.variables.iterateByKind(796, "user", "s", "users", {
+    size: 999,
+  })) {
+    seen.push(item);
+  }
+
+  assert.equal(seen.length, 105, "a requested size above the API maximum must not truncate");
+  assert.equal(page, 2, "must walk the second page once the first is full");
+  assert.ok(calls[0]?.url.includes("size=100"), "the wire must carry the clamped size");
+}
+
 const tests = [
   testReadUsesReadKeyAndCorrectPath,
   testWriteUsesWriteKey,
@@ -339,7 +372,9 @@ const tests = [
   testUserScopeDoesNotSanitizeEntityId,
   testBatchSendsBothKeysAndSpecShape,
   testListByKindMapsQueryParams,
+  testListByKindClampsPageSize,
   testIterateByKindStopsOnShortPage,
+  testIterateByKindUsesClampedSizeForTermination,
   testProfilePatchAllowsNullToDelete,
   testMissingKeyFailsBeforeRequest,
   testNonIntegerValuesRejected,
@@ -352,7 +387,6 @@ const tests = [
   testFurniIdConversionBothWays,
   testBatchAllowsBigintValues,
 ];
-
 
 for (const test of tests) {
   await test();

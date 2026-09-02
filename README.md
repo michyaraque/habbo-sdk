@@ -284,6 +284,36 @@ An operation can fail without failing the batch, which is why each result carrie
 await habbo.variables.bulkDelete(796, ["score", "lives"]);
 ```
 
+### Rate limits
+
+All Wired Variables limits are **per room**, measured over a 10-second burst
+window and a 60-second sustained window:
+
+| Call class                                              | Per minute | Burst (10 s) |
+| ------------------------------------------------------- | ---------- | ------------ |
+| Simple reads — `get`, `getGlobal`                     | 300        | 60           |
+| List endpoints — `list`, `listByKind`, `count`         | 120        | 20           |
+| Profile reads — `profiles.findUser`, `profiles.get*`    | 120        | 20           |
+| Writes — `set`, `update`, `delete`, `profiles.patch*`, `profiles.deleteUser` | 120 | 30 |
+| Bulk deletes — `bulkDelete`                            | 10         | 5            |
+| Batch requests — `batch(...).execute()`                | 30         | —            |
+
+A batch holds at most 50 operations, and batched writes draw from an
+additional budget of 500 write operations per minute. The SDK clamps every
+page `size` to the API maximum of 100 and pages iterators at that size, so a
+`size` above 100 never wastes a request.
+
+Paginated lists default to page 1 with 50 entries, and the `/count` endpoint
+answers from a server-side cache that grows with the count (about 20 seconds
+below 1,000 stored values, up to about 10 minutes at 100,000 or more). Treat
+counts as approximate and poll them sparingly.
+
+When a request does hit a limit, the server answers `429`; the SDK retries up
+to `maxRetries` times honouring `Retry-After`, then throws
+`HabboRateLimitError`. Staying inside the limits is the caller's job: batch
+operations on the same variable, prefer whole-profile reads over per-variable
+reads, and cache leaderboards and counts for frequently accessed rooms.
+
 ### Method reference
 
 | Method                                               | Key   | Description                           |
