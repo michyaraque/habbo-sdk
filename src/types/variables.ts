@@ -95,7 +95,7 @@ export interface PagedVariableItem extends WiredVariable {
 export interface PagedVariables {
   /** The values on this page. */
   items: PagedVariableItem[];
-  /** The zero-based page index this result represents. */
+  /** The one-based page index this result represents; the first page is 1. */
   page: number;
   /** The page size used to produce this result. */
   size: number;
@@ -117,7 +117,7 @@ export interface ListByKindOptions {
    * @defaultValue the server's own direction
    */
   orderDir?: "asc" | "desc";
-  /** Zero-based page index. */
+  /** One-based page index; the first page is 1. */
   page?: number;
   /** Number of items per page. */
   size?: number;

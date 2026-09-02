@@ -193,6 +193,8 @@ async function testIterateByKindStopsOnShortPage() {
 
   assert.equal(seen.length, 3, "should drain both pages then stop on the short one");
   assert.equal(page, 2, "should not request a page after a short one");
+  assert.ok(calls[0]?.url.includes("page=1"), "iteration must start at page 1");
+  assert.ok(calls[1]?.url.includes("page=2"), "the second request must ask for page 2");
 }
 
 async function testProfilePatchAllowsNullToDelete() {
@@ -361,6 +363,20 @@ async function testIterateByKindUsesClampedSizeForTermination() {
   assert.equal(seen.length, 105, "a requested size above the API maximum must not truncate");
   assert.equal(page, 2, "must walk the second page once the first is full");
   assert.ok(calls[0]?.url.includes("size=100"), "the wire must carry the clamped size");
+  assert.ok(calls[0]?.url.includes("page=1"), "iteration must start at page 1");
+}
+
+async function testListByKindNormalizesPageToAtLeastOne() {
+  const habbo = client({ readKey: "r" });
+
+  await habbo.variables.listByKind(796, "user", "score", "users", { page: 0 });
+  assert.ok(lastCall().url.includes("page=1"), "page 0 must be sent as page 1");
+
+  await habbo.variables.listByKind(796, "user", "score", "users", { page: -3 });
+  assert.ok(lastCall().url.includes("page=1"), "a negative page must be sent as page 1");
+
+  await habbo.variables.listByKind(796, "user", "score", "users", { page: 2 });
+  assert.ok(lastCall().url.includes("page=2"), "pages above 1 pass through unchanged");
 }
 
 const tests = [
@@ -373,6 +389,7 @@ const tests = [
   testBatchSendsBothKeysAndSpecShape,
   testListByKindMapsQueryParams,
   testListByKindClampsPageSize,
+  testListByKindNormalizesPageToAtLeastOne,
   testIterateByKindStopsOnShortPage,
   testIterateByKindUsesClampedSizeForTermination,
   testProfilePatchAllowsNullToDelete,

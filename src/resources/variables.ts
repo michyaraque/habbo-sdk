@@ -622,7 +622,7 @@ export class VariablesResource extends WiredResource {
         query: {
           order_by: options.orderBy,
           order_dir: options.orderDir,
-          page: options.page,
+          page: normalizePage(options.page),
           size: normalizePageSize(options.size),
         },
       },
@@ -664,7 +664,7 @@ export class VariablesResource extends WiredResource {
     options: ListByKindOptions = {},
   ): AsyncGenerator<PagedVariables["items"][number], void, undefined> {
     const size = normalizePageSize(options.size) ?? 100;
-    let page = options.page ?? 0;
+    let page = normalizePage(options.page) ?? 1;
 
     for (;;) {
       const result = await this.listByKind(roomId, scope, variableName, targetKind, {
@@ -854,6 +854,13 @@ function normalizePageSize(size: number | undefined): number | undefined {
     return undefined;
   }
   return Math.min(MAX_LIST_PAGE_SIZE, Math.floor(size));
+}
+
+function normalizePage(page: number | undefined): number | undefined {
+  if (page === undefined || !Number.isFinite(page)) {
+    return undefined;
+  }
+  return Math.max(1, Math.floor(page));
 }
 
 /** Validates every non-null value of a profile patch before sending it. */
