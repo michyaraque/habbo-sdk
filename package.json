@@ -1,6 +1,6 @@
 {
   "name": "habbo-sdk",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "TypeScript SDK for the public Habbo API and the Wired Variables API.",
   "license": "MIT",
   "author": {
@@ -38,7 +38,8 @@
     "example:variables": "tsx examples/variables.ts",
     "example:origins": "tsx examples/origins.ts",
     "docs": "typedoc",
-    "docs:serve": "npx --yes http-server docs -p 8080 -c-1"
+    "docs:serve": "npx --yes http-server docs -p 8080 -c-1",
+    "prepack": "pnpm run build"
   },
   "keywords": [
     "habbo",
