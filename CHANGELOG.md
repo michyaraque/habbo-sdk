@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/michyaraque/habbo-sdk/compare/v0.5.2...v0.6.0) (2026-09-08)
+
+
+### Features
+
+* implement bigint support for wired variables and update related tests ([361cfa3](https://github.com/michyaraque/habbo-sdk/commit/361cfa354a07cc21a4eda76361b233adab523adf))
+
 ## [0.5.0](https://github.com/michyaraque/habbo-sdk/compare/v0.4.0...v0.5.0) (2026-09-02)
 
 
